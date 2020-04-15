@@ -43,7 +43,7 @@ video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t backgr
 
     renderer->logger = logger;
 
-    renderer->pipeline = gst_parse_launch("appsrc name=video_source is-live=true ! queue ! decodebin ! videoconvert ! autovideosink name=video_sink display-name=UxPlay sync=false", &error);
+    renderer->pipeline = gst_parse_launch("appsrc name=video_source is-live=true ! queue ! decodebin ! videoconvert ! autovideosink name=video_sink sync=false", &error);
     g_assert (renderer->pipeline);
 
 
