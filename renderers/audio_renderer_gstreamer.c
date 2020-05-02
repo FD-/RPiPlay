@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <math.h>
 #include <gst/app/gstappsrc.h>
 
 struct audio_renderer_s {
