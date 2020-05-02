@@ -43,7 +43,8 @@ video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t backgr
 
     renderer->logger = logger;
 
-    renderer->pipeline = gst_parse_launch("appsrc name=video_source is-live=true ! queue ! decodebin ! videoconvert ! autovideosink name=video_sink sync=false", &error);
+    renderer->pipeline = gst_parse_launch("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
+    "queue ! decodebin ! videoconvert ! autovideosink name=video_sink sync=false", &error);
     g_assert (renderer->pipeline);
 
 
@@ -65,7 +66,7 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
 
     buffer = gst_buffer_new_and_alloc(data_len);
     assert(buffer != NULL);
-    GST_BUFFER_DTS(buffer) = (GstClockTime)pts;
+    GST_BUFFER_PTS(buffer) = (GstClockTime)pts;
     gst_buffer_fill(buffer, 0, data, data_len);
     gst_app_src_push_buffer (GST_APP_SRC(renderer->appsrc), buffer);
 }
