@@ -44,7 +44,8 @@ audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_
     }
     renderer->logger = logger;
 
-    renderer->pipeline = gst_parse_launch("appsrc name=audio_source is-live=true ! queue ! decodebin ! audioconvert ! audiorate ! volume name=volume volume=6 ! queue ! autoaudiosink sync=false", &error);
+    renderer->pipeline = gst_parse_launch("appsrc name=audio_source stream-type=0 format=GST_FORMAT_TIME is-live=true ! queue ! decodebin !"
+    "audioconvert ! volume name=volume ! level ! autoaudiosink sync=false", &error);
     g_assert (renderer->pipeline);
 
     renderer->appsrc = gst_bin_get_by_name (GST_BIN (renderer->pipeline), "audio_source");
@@ -89,14 +90,18 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
 
     buffer = gst_buffer_new_and_alloc(data_len);
     assert(buffer != NULL);
-
+    GST_BUFFER_PTS (buffer) = GST_BUFFER_TIMESTAMP (buffer);
     gst_buffer_fill(buffer, 0, data, data_len);
     gst_app_src_push_buffer(GST_APP_SRC(renderer->appsrc), buffer);
 
 }
 
 void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
-    //g_object_set(renderer->volume, "volume", volume, NULL);
+    float avol;
+        if (fabs(volume) < 28) {
+	        avol=floorf(((28-fabs(volume))/28)*10)/10;
+    	    g_object_set(renderer->volume, "volume", avol, NULL);
+        }
 }
 
 void audio_renderer_flush(audio_renderer_t *renderer) {
