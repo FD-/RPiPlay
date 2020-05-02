@@ -29,7 +29,6 @@
 
 struct audio_renderer_s {
     logger_t *logger;
-    video_renderer_t *video_renderer;
     GstElement *appsrc; 
     GstElement *pipeline;
     GstElement *volume;
@@ -91,7 +90,7 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
 
     buffer = gst_buffer_new_and_alloc(data_len);
     assert(buffer != NULL);
-    GST_BUFFER_PTS (buffer) = GST_BUFFER_TIMESTAMP (buffer);
+    GST_BUFFER_DTS(buffer) = (GstClockTime)pts;
     gst_buffer_fill(buffer, 0, data, data_len);
     gst_app_src_push_buffer(GST_APP_SRC(renderer->appsrc), buffer);
 
