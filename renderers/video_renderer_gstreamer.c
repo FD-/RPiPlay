@@ -18,12 +18,7 @@
  */
 
 #include "video_renderer.h"
-#include <stdlib.h>
 #include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 
@@ -31,6 +26,28 @@ struct video_renderer_s {
     logger_t *logger;
     GstElement *appsrc, *pipeline, *sink;
 };
+
+static gboolean check_plugins (void)
+{
+  int i;
+  gboolean ret;
+  GstRegistry *registry;
+  const gchar *needed[] = { "app", "libav", "playback", "autodetect", NULL};
+
+  registry = gst_registry_get ();
+  ret = TRUE;
+  for (i = 0; i < g_strv_length ((gchar **) needed); i++) {
+    GstPlugin *plugin;
+    plugin = gst_registry_find_plugin (registry, needed[i]);
+    if (!plugin) {
+      g_print ("Required gstreamer plugin '%s' not found\n", needed[i]);
+      ret = FALSE;
+      continue;
+    }
+    gst_object_unref (plugin);
+  }
+  return ret;
+}
 
 video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency) {
     video_renderer_t *renderer;
@@ -42,6 +59,8 @@ video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t backgr
     gst_init(NULL, NULL);
 
     renderer->logger = logger;
+    
+    assert(check_plugins ());
 
     renderer->pipeline = gst_parse_launch("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
     "queue ! decodebin ! videoconvert ! autovideosink name=video_sink sync=false", &error);
