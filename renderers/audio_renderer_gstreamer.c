@@ -18,12 +18,7 @@
  */
 
 #include "audio_renderer.h"
-#include <stdlib.h>
 #include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <math.h>
 #include <gst/app/gstappsrc.h>
 
@@ -34,6 +29,28 @@ struct audio_renderer_s {
     GstElement *volume;
 };
 
+static gboolean check_plugins (void)
+{
+  int i;
+  gboolean ret;
+  GstRegistry *registry;
+  const gchar *needed[] = {"app", "libav", "playback", "autodetect", NULL};
+
+  registry = gst_registry_get ();
+  ret = TRUE;
+  for (i = 0; i < g_strv_length ((gchar **) needed); i++) {
+    GstPlugin *plugin;
+    plugin = gst_registry_find_plugin (registry, needed[i]);
+    if (!plugin) {
+      g_print ("Required gstreamer plugin '%s' not found\n", needed[i]);
+      ret = FALSE;
+      continue;
+    }
+    gst_object_unref (plugin);
+  }
+  return ret;
+}
+
 audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
     audio_renderer_t *renderer;
     GError *error = NULL;
@@ -43,6 +60,8 @@ audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_
         return NULL;
     }
     renderer->logger = logger;
+
+    assert(check_plugins ());
 
     renderer->pipeline = gst_parse_launch("appsrc name=audio_source stream-type=0 format=GST_FORMAT_TIME is-live=true ! queue ! decodebin !"
     "audioconvert ! volume name=volume ! level ! autoaudiosink sync=false", &error);
