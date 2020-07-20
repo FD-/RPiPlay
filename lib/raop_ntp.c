@@ -202,7 +202,7 @@ raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
     // We're calling recvfrom without knowing whether there is any data, so we need a timeout
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = 3000;
+    tv.tv_usec = 300000;
     if (setsockopt(tsock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         goto sockets_cleanup;
     }
@@ -217,6 +217,23 @@ raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
     sockets_cleanup:
     if (tsock != -1) closesocket(tsock);
     return -1;
+}
+
+static void
+raop_ntp_flush_socket(int fd)
+{
+    int bytes_available = 0;
+    while (ioctl(fd, FIONREAD, &bytes_available) == 0 && bytes_available > 0)
+    {
+        // We are guaranteed that we won't block, because bytes are available.
+        // Read 1 byte. Extra bytes in the datagram will be discarded.
+        char c;
+        int result = recvfrom(fd, &c, sizeof(c), 0, NULL, NULL);
+        if (result < 0)
+        {
+            break;
+        }
+    }
 }
 
 static THREAD_RETVAL
@@ -240,6 +257,9 @@ raop_ntp_thread(void *arg)
         }
         MUTEX_UNLOCK(raop_ntp->run_mutex);
 
+        // Flush the socket in case a super delayed response arrived or something
+        raop_ntp_flush_socket(raop_ntp->tsock);
+
         // Send request
         uint64_t send_time = raop_ntp_get_local_time(raop_ntp);
         byteutils_put_ntp_timestamp(request, 24, send_time);
@@ -248,59 +268,58 @@ raop_ntp_thread(void *arg)
         logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp send_len = %d", send_len);
         if (send_len < 0) {
             logger_log(raop_ntp->logger, LOGGER_ERR, "raop_ntp error sending request");
-            break;
+        } else {
+            // Read response
+            response_len = recvfrom(raop_ntp->tsock, (char *)response, sizeof(response), 0,
+                                    (struct sockaddr *) &raop_ntp->remote_saddr, &raop_ntp->remote_saddr_len);
+            if (response_len < 0) {
+                logger_log(raop_ntp->logger, LOGGER_ERR, "raop_ntp receive timeout");
+            } else {
+                logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp receive time type_t packetlen = %d", response_len);
+
+                int64_t t3 = (int64_t) raop_ntp_get_local_time(raop_ntp);
+                // Local time of the client when the NTP request packet leaves the client
+                int64_t t0 = (int64_t) byteutils_get_ntp_timestamp(response, 8);
+                // Local time of the server when the NTP request packet arrives at the server
+                int64_t t1 = (int64_t) byteutils_get_ntp_timestamp(response, 16);
+                // Local time of the server when the response message leaves the server
+                int64_t t2 = (int64_t) byteutils_get_ntp_timestamp(response, 24);
+
+                // The iOS device sends its time in micro seconds relative to an arbitrary Epoch (the last boot).
+                // For a little bonus confusion, they add SECONDS_FROM_1900_TO_1970 * 1000000 us.
+                // This means we have to expect some rather huge offset, but its growth or shrink over time should be small.
+
+                raop_ntp->data_index = (raop_ntp->data_index + 1) % RAOP_NTP_DATA_COUNT;
+                raop_ntp->data[raop_ntp->data_index].time = t3;
+                raop_ntp->data[raop_ntp->data_index].offset     = ((t1 - t0) + (t2 - t3)) / 2;
+                raop_ntp->data[raop_ntp->data_index].delay      = ((t3 - t0) - (t2 - t1));
+                raop_ntp->data[raop_ntp->data_index].dispersion = RAOP_NTP_R_RHO + RAOP_NTP_S_RHO +  (t3 - t0) * RAOP_NTP_PHI_PPM / 1000000u;
+
+                // Sort by delay
+                memcpy(data_sorted, raop_ntp->data, sizeof(data_sorted));
+                qsort(data_sorted, RAOP_NTP_DATA_COUNT, sizeof(data_sorted[0]), raop_ntp_compare);
+
+                uint64_t dispersion = 0ull;
+                int64_t offset = data_sorted[0].offset;
+                int64_t delay = data_sorted[RAOP_NTP_DATA_COUNT - 1].delay;
+
+                // Calculate dispersion
+                for(int i = 0; i < RAOP_NTP_DATA_COUNT; ++i) {
+                    unsigned long long disp = raop_ntp->data[i].dispersion + (t3 - raop_ntp->data[i].time) * RAOP_NTP_PHI_PPM / 1000000u;
+                    dispersion += disp / two_pow_n[i];
+                }
+
+                MUTEX_LOCK(raop_ntp->sync_params_mutex);
+
+                int64_t correction = offset - raop_ntp->sync_offset;
+                raop_ntp->sync_offset = offset;
+                raop_ntp->sync_dispersion = dispersion;
+                raop_ntp->sync_delay = delay;
+                MUTEX_UNLOCK(raop_ntp->sync_params_mutex);
+
+                logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp sync correction = %lld", correction);
+            }
         }
-
-        // Read response
-        response_len = recvfrom(raop_ntp->tsock, (char *)response, sizeof(response), 0,
-                                (struct sockaddr *) &raop_ntp->remote_saddr, &raop_ntp->remote_saddr_len);
-        if (response_len < 0) {
-            logger_log(raop_ntp->logger, LOGGER_ERR, "raop_ntp receive timeout");
-            break;
-        }
-        logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp receive time type_t packetlen = %d", response_len);
-
-        int64_t t3 = (int64_t) raop_ntp_get_local_time(raop_ntp);
-        // Local time of the client when the NTP request packet leaves the client
-        int64_t t0 = (int64_t) byteutils_get_ntp_timestamp(response, 8);
-        // Local time of the server when the NTP request packet arrives at the server
-        int64_t t1 = (int64_t) byteutils_get_ntp_timestamp(response, 16);
-        // Local time of the server when the response message leaves the server
-        int64_t t2 = (int64_t) byteutils_get_ntp_timestamp(response, 24);
-
-        // The iOS device sends its time in micro seconds relative to an arbitrary Epoch (the last boot).
-        // For a little bonus confusion, they add SECONDS_FROM_1900_TO_1970 * 1000000 us.
-        // This means we have to expect some rather huge offset, but its growth or shrink over time should be small.
-
-        raop_ntp->data_index = (raop_ntp->data_index + 1) % RAOP_NTP_DATA_COUNT;
-        raop_ntp->data[raop_ntp->data_index].time = t3;
-        raop_ntp->data[raop_ntp->data_index].offset     = ((t1 - t0) + (t2 - t3)) / 2;
-        raop_ntp->data[raop_ntp->data_index].delay      = ((t3 - t0) - (t2 - t1));
-        raop_ntp->data[raop_ntp->data_index].dispersion = RAOP_NTP_R_RHO + RAOP_NTP_S_RHO +  (t3 - t0) * RAOP_NTP_PHI_PPM / 1000000u;
-
-        // Sort by delay
-        memcpy(data_sorted, raop_ntp->data, sizeof(data_sorted));
-        qsort(data_sorted, RAOP_NTP_DATA_COUNT, sizeof(data_sorted[0]), raop_ntp_compare);
-
-        uint64_t dispersion = 0ull;
-        int64_t offset = data_sorted[0].offset;
-        int64_t delay = data_sorted[RAOP_NTP_DATA_COUNT - 1].delay;
-
-        // Calculate dispersion
-        for(int i = 0; i < RAOP_NTP_DATA_COUNT; ++i) {
-            unsigned long long disp = raop_ntp->data[i].dispersion + (t3 - raop_ntp->data[i].time) * RAOP_NTP_PHI_PPM / 1000000u;
-            dispersion += disp / two_pow_n[i];
-        }
-
-        MUTEX_LOCK(raop_ntp->sync_params_mutex);
-
-        int64_t correction = offset - raop_ntp->sync_offset;
-        raop_ntp->sync_offset = offset;
-        raop_ntp->sync_dispersion = dispersion;
-        raop_ntp->sync_delay = delay;
-        MUTEX_UNLOCK(raop_ntp->sync_params_mutex);
-
-        logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp sync correction = %lld", correction);
 
         // Sleep for 3 seconds
         struct timeval now;
