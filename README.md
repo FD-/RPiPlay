@@ -56,6 +56,21 @@ make
 
 GCC 5 or later is required.
 
+# Experimental: Building for gstreamer (works on generic Linux machines)
+
+For building on Ubuntu 18.04, follow these steps:
+```bash
+sudo apt-get install cmake libavahi-compat-libdnssd-dev libplist-dev libssl-dev \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
+    gstreamer1.0-vaapi gstreamer1.0-plugins-bad
+mkdir build
+cd build
+cmake .. -DRENDERER=gstreamer
+make
+```
+
+Note: The -b, -r, -l, and -a options are not supported with the gstreamer renderer.
+
 # Usage
 
 Start the rpiplay executable and an AirPlay mirror target device will appear in the network.
