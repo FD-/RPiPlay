@@ -24,7 +24,7 @@
 
 struct audio_renderer_s {
     logger_t *logger;
-    GstElement *appsrc; 
+    GstElement *appsrc;
     GstElement *pipeline;
     GstElement *volume;
 };
@@ -69,12 +69,12 @@ audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_
 
     renderer->appsrc = gst_bin_get_by_name (GST_BIN (renderer->pipeline), "audio_source");
     renderer->volume = gst_bin_get_by_name (GST_BIN (renderer->pipeline), "volume");
-    
+
     gchar eld_conf[] = { 0xF8, 0xE8, 0x50, 0x00 };
     GstBuffer *codec_data = gst_buffer_new_and_alloc(sizeof(eld_conf));
     GstMapInfo map;
 
-    gst_buffer_map (codec_data, &map, GST_MAP_WRITE); 
+    gst_buffer_map (codec_data, &map, GST_MAP_WRITE);
     memset (map.data, eld_conf[0], map.size);
     memset (map.data+1, eld_conf[1], map.size);
     memset (map.data+2, eld_conf[2], map.size);
@@ -117,10 +117,10 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
 
 void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
     float avol;
-        if (fabs(volume) < 28) {
-	        avol=floorf(((28-fabs(volume))/28)*10)/10;
-    	    g_object_set(renderer->volume, "volume", avol, NULL);
-        }
+    if (fabs(volume) < 28) {
+        avol=floorf(((28-fabs(volume))/28)*10)/10;
+        g_object_set(renderer->volume, "volume", avol, NULL);
+    }
 }
 
 void audio_renderer_flush(audio_renderer_t *renderer) {

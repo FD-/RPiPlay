@@ -59,7 +59,7 @@ video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t backgr
     gst_init(NULL, NULL);
 
     renderer->logger = logger;
-    
+
     assert(check_plugins ());
 
     renderer->pipeline = gst_parse_launch("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
