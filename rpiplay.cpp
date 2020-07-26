@@ -99,10 +99,12 @@ void print_info(char *name) {
     printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)]\n", name);
     printf("Options:\n");
     printf("-n name               Specify the network name of the AirPlay server\n");
+#if !defined(RENDERER_GSTREAMER)
     printf("-b (on|auto|off)      Show black background always, only during active connection, or never\n");
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
     printf("-a (hdmi|analog|off)  Set audio output device\n");
+#endif
     printf("-d                    Enable debug logging\n");
     printf("-v/-h                 Displays this help and version information\n");
 }

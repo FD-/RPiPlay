@@ -49,7 +49,7 @@ static gboolean check_plugins (void)
   return ret;
 }
 
-video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency) {
+video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
     video_renderer_t *renderer;
     GError *error = NULL;
 
