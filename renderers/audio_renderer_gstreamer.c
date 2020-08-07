@@ -22,12 +22,14 @@
 #include <math.h>
 #include <gst/app/gstappsrc.h>
 
-struct audio_renderer_s {
-    logger_t *logger;
+typedef struct audio_renderer_gstreamer_s {
+    audio_renderer_t base;
     GstElement *appsrc;
     GstElement *pipeline;
     GstElement *volume;
-};
+} audio_renderer_gstreamer_t;
+
+static const audio_renderer_funcs_t audio_renderer_gstreamer_funcs;
 
 static gboolean check_plugins (void)
 {
@@ -51,15 +53,22 @@ static gboolean check_plugins (void)
   return ret;
 }
 
-audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
-    audio_renderer_t *renderer;
+audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+    audio_renderer_gstreamer_t *renderer;
     GError *error = NULL;
 
-    renderer = calloc(1, sizeof(audio_renderer_t));
+    renderer = calloc(1, sizeof(audio_renderer_gstreamer_t));
     if (!renderer) {
         return NULL;
     }
-    renderer->logger = logger;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &audio_renderer_gstreamer_funcs;
+    renderer->base.type = AUDIO_RENDERER_GSTREAMER;
+    
+    // If the video renderer is not a gstreamer renderer, we need to initialize gstreamer
+    if (!video_renderer || video_renderer->type != VIDEO_RENDERER_GSTREAMER) {
+        gst_init(NULL, NULL);
+    }
 
     assert(check_plugins ());
 
@@ -93,47 +102,59 @@ audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_
     gst_buffer_unmap (codec_data, &map);
     gst_buffer_unref (codec_data);
 
-    return renderer;
+    return &renderer->base;
 }
 
-void audio_renderer_start(audio_renderer_t *renderer) {
-    //g_signal_connect( renderer->pipeline, "deep-notify", G_CALLBACK(gst_object_default_deep_notify ), NULL );
-    gst_element_set_state (renderer->pipeline, GST_STATE_PLAYING);
+void audio_renderer_gstreamer_start(audio_renderer_t *renderer) {
+    audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
+    //g_signal_connect( r->pipeline, "deep-notify", G_CALLBACK(gst_object_default_deep_notify ), NULL );
+    gst_element_set_state (r->pipeline, GST_STATE_PLAYING);
 }
 
-void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char* data, int data_len, uint64_t pts) {
+void audio_renderer_gstreamer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts) {
 
     GstBuffer *buffer;
 
     if (data_len == 0) return;
+    
+    audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
 
     buffer = gst_buffer_new_and_alloc(data_len);
     assert(buffer != NULL);
     GST_BUFFER_DTS(buffer) = (GstClockTime)pts;
     gst_buffer_fill(buffer, 0, data, data_len);
-    gst_app_src_push_buffer(GST_APP_SRC(renderer->appsrc), buffer);
+    gst_app_src_push_buffer(GST_APP_SRC(r->appsrc), buffer);
 
 }
 
-void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
+void audio_renderer_gstreamer_set_volume(audio_renderer_t *renderer, float volume) {
+    audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
     float avol;
     if (fabs(volume) < 28) {
         avol=floorf(((28-fabs(volume))/28)*10)/10;
-        g_object_set(renderer->volume, "volume", avol, NULL);
+        g_object_set(r->volume, "volume", avol, NULL);
     }
 }
 
-void audio_renderer_flush(audio_renderer_t *renderer) {
+void audio_renderer_gstreamer_flush(audio_renderer_t *renderer) {
 }
 
-void audio_renderer_destroy(audio_renderer_t *renderer) {
-
-    gst_app_src_end_of_stream (GST_APP_SRC(renderer->appsrc));
-    gst_element_set_state (renderer->pipeline, GST_STATE_NULL);
-    gst_object_unref (renderer->pipeline);
-    gst_object_unref (renderer->appsrc);
-    gst_object_unref (renderer->volume);
+void audio_renderer_gstreamer_destroy(audio_renderer_t *renderer) {
+    audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
+    gst_app_src_end_of_stream (GST_APP_SRC(r->appsrc));
+    gst_element_set_state (r->pipeline, GST_STATE_NULL);
+    gst_object_unref (r->pipeline);
+    gst_object_unref (r->appsrc);
+    gst_object_unref (r->volume);
     if (renderer) {
         free(renderer);
     }
 }
+
+static const audio_renderer_funcs_t audio_renderer_gstreamer_funcs = {
+    .start = audio_renderer_gstreamer_start,
+    .render_buffer = audio_renderer_gstreamer_render_buffer,
+    .set_volume = audio_renderer_gstreamer_set_volume,
+    .flush = audio_renderer_gstreamer_flush,
+    .destroy = audio_renderer_gstreamer_destroy,
+};

@@ -48,12 +48,51 @@ int start_server(std::vector<char> hw_addr, std::string name, background_mode_t 
 
 int stop_server();
 
+typedef video_renderer_t *(*video_init_func_t)(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation);
+typedef audio_renderer_t *(*audio_init_func_t)(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
+
+typedef struct video_renderer_list_entry_s {
+    const char *name;
+    video_init_func_t init_func;
+} video_renderer_list_entry_t;
+
+typedef struct audio_renderer_list_entry_s {
+    const char *name;
+    audio_init_func_t init_func;
+} audio_renderer_list_entry_t;
+
 static bool running = false;
 static dnssd_t *dnssd = NULL;
 static raop_t *raop = NULL;
+static video_init_func_t video_init_func = NULL;
+static audio_init_func_t audio_init_func = NULL;
 static video_renderer_t *video_renderer = NULL;
 static audio_renderer_t *audio_renderer = NULL;
 static logger_t *render_logger = NULL;
+
+static const video_renderer_list_entry_t video_renderers[] = {
+#if defined(HAS_RPI_RENDERER)
+    {"rpi", video_renderer_rpi_init},
+#endif
+#if defined(HAS_GSTREAMER_RENDERER)
+    {"gstreamer", video_renderer_gstreamer_init},
+#endif
+#if defined(HAS_DUMMY_RENDERER)
+    {"dummy", video_renderer_dummy_init},
+#endif
+};
+
+static const audio_renderer_list_entry_t audio_renderers[] = {
+#if defined(HAS_RPI_RENDERER)
+    {"rpi", audio_renderer_rpi_init},
+#endif
+#if defined(HAS_GSTREAMER_RENDERER)
+    {"gstreamer", audio_renderer_gstreamer_init},
+#endif
+#if defined(HAS_DUMMY_RENDERER)
+    {"dummy", audio_renderer_dummy_init},
+#endif
+};
 
 static void signal_handler(int sig) {
     switch (sig) {
@@ -94,17 +133,33 @@ std::string find_mac() {
     return mac_address;
 }
 
+static video_init_func_t find_video_init_func(const char *name) {
+    for (int i = 0; i < sizeof(video_renderers)/sizeof(video_renderers[0]); i++) {
+        if (!strcmp(name, video_renderers[i].name)) {
+            return video_renderers[i].init_func;
+        }
+    }
+    return NULL;
+}
+
+static audio_init_func_t find_audio_init_func(const char *name) {
+    for (int i = 0; i < sizeof(audio_renderers)/sizeof(audio_renderers[0]); i++) {
+        if (!strcmp(name, audio_renderers[i].name)) {
+            return audio_renderers[i].init_func;
+        }
+    }
+    return NULL;
+}
+
 void print_info(char *name) {
     printf("RPiPlay %s: An open-source AirPlay mirroring server for Raspberry Pi\n", VERSION);
     printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)]\n", name);
     printf("Options:\n");
     printf("-n name               Specify the network name of the AirPlay server\n");
-#if !defined(RENDERER_GSTREAMER)
     printf("-b (on|auto|off)      Show black background always, only during active connection, or never\n");
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
     printf("-a (hdmi|analog|off)  Set audio output device\n");
-#endif
     printf("-d                    Enable debug logging\n");
     printf("-v/-h                 Displays this help and version information\n");
 }
@@ -119,6 +174,9 @@ int main(int argc, char *argv[]) {
     bool low_latency = DEFAULT_LOW_LATENCY;
     int rotation = DEFAULT_ROTATE;
     bool debug_log = DEFAULT_DEBUG_LOG;
+    // Default to the best available renderer
+    video_init_func = video_renderers[0].init_func;
+    audio_init_func = audio_renderers[0].init_func;
 
     // Parse arguments
     for (int i = 1; i < argc; i++) {
@@ -149,6 +207,26 @@ int main(int argc, char *argv[]) {
             rotation = atoi(argv[++i]);
         } else if (arg == "-d") {
             debug_log = !debug_log;
+        } else if (arg == "-vr") {
+            if (i == argc - 1) {
+                fprintf(stderr, "Error: You must supply the name of a video renderer after the -vr argument.\n");
+                exit(1);
+            }
+            video_init_func = find_video_init_func(argv[++i]);
+            if (!video_init_func) {
+                fprintf(stderr, "Error: Unable to locate video renderer \"%s\".\n", argv[i]);
+                exit(1);
+            }
+        } else if (arg == "-ar") {
+            if (i == argc - 1) {
+                fprintf(stderr, "Error: You must supply the name of an audio renderer after the -ar argument.\n");
+                exit(1);
+            }
+            audio_init_func = find_audio_init_func(argv[++i]);
+            if (!audio_init_func) {
+                fprintf(stderr, "Error: Unable to locate audio renderer \"%s\".\n", argv[i]);
+                exit(1);
+            }
         } else if (arg == "-h" || arg == "-v") {
             print_info(argv[0]);
             exit(0);
@@ -176,34 +254,36 @@ int main(int argc, char *argv[]) {
 
 // Server callbacks
 extern "C" void conn_init(void *cls) {
-    video_renderer_update_background(video_renderer, 1);
+    if (video_renderer) video_renderer->funcs->update_background(video_renderer, 1);
 }
 
 extern "C" void conn_destroy(void *cls) {
-    video_renderer_update_background(video_renderer, -1);
+    if (video_renderer) video_renderer->funcs->update_background(video_renderer, -1);
 }
 
 extern "C" void audio_process(void *cls, raop_ntp_t *ntp, aac_decode_struct *data) {
     if (audio_renderer != NULL) {
-        audio_renderer_render_buffer(audio_renderer, ntp, data->data, data->data_len, data->pts);
+        audio_renderer->funcs->render_buffer(audio_renderer, ntp, data->data, data->data_len, data->pts);
     }
 }
 
 extern "C" void video_process(void *cls, raop_ntp_t *ntp, h264_decode_struct *data) {
-    video_renderer_render_buffer(video_renderer, ntp, data->data, data->data_len, data->pts, data->frame_type);
+    if (video_renderer != NULL) {
+        video_renderer->funcs->render_buffer(video_renderer, ntp, data->data, data->data_len, data->pts, data->frame_type);
+    }
 }
 
 extern "C" void audio_flush(void *cls) {
-    audio_renderer_flush(audio_renderer);
+    if (audio_renderer) audio_renderer->funcs->flush(audio_renderer);
 }
 
 extern "C" void video_flush(void *cls) {
-    video_renderer_flush(video_renderer);
+    if (video_renderer) video_renderer->funcs->flush(video_renderer);
 }
 
 extern "C" void audio_set_volume(void *cls, float volume) {
     if (audio_renderer != NULL) {
-        audio_renderer_set_volume(audio_renderer, volume);
+        audio_renderer->funcs->set_volume(audio_renderer, volume);
     }
 }
 
@@ -258,21 +338,21 @@ int start_server(std::vector<char> hw_addr, std::string name, background_mode_t 
 
     if (low_latency) logger_log(render_logger, LOGGER_INFO, "Using low-latency mode");
 
-    if ((video_renderer = video_renderer_init(render_logger, background_mode, low_latency, rotation)) == NULL) {
+    if ((video_renderer = video_init_func(render_logger, background_mode, low_latency, rotation)) == NULL) {
         LOGE("Could not init video renderer");
         return -1;
     }
 
     if (audio_device == AUDIO_DEVICE_NONE) {
         LOGI("Audio disabled");
-    } else if ((audio_renderer = audio_renderer_init(render_logger, video_renderer, audio_device, low_latency)) ==
+    } else if ((audio_renderer = audio_init_func(render_logger, video_renderer, audio_device, low_latency)) ==
                NULL) {
         LOGE("Could not init audio renderer");
         return -1;
     }
 
-    if (video_renderer) video_renderer_start(video_renderer);
-    if (audio_renderer) audio_renderer_start(audio_renderer);
+    if (video_renderer) video_renderer->funcs->start(video_renderer);
+    if (audio_renderer) audio_renderer->funcs->start(audio_renderer);
 
     unsigned short port = 0;
     raop_start(raop, &port);
@@ -298,8 +378,8 @@ int stop_server() {
     dnssd_unregister_raop(dnssd);
     dnssd_unregister_airplay(dnssd);
     // If we don't destroy these two in the correct order, we get a deadlock from the ilclient library
-    audio_renderer_destroy(audio_renderer);
-    video_renderer_destroy(video_renderer);
+    if (audio_renderer) audio_renderer->funcs->destroy(audio_renderer);
+    if (video_renderer) video_renderer->funcs->destroy(video_renderer);
     logger_destroy(render_logger);
     return 0;
 }

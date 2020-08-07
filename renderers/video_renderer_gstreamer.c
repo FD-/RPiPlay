@@ -22,10 +22,12 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 
-struct video_renderer_s {
-    logger_t *logger;
+typedef struct video_renderer_gstreamer_s {
+    video_renderer_t base;
     GstElement *appsrc, *pipeline, *sink;
-};
+} video_renderer_gstreamer_t;
+
+static const video_renderer_funcs_t video_renderer_gstreamer_funcs;
 
 static gboolean check_plugins (void)
 {
@@ -49,16 +51,18 @@ static gboolean check_plugins (void)
   return ret;
 }
 
-video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
-    video_renderer_t *renderer;
+video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+    video_renderer_gstreamer_t *renderer;
     GError *error = NULL;
 
-    renderer = calloc(1, sizeof(video_renderer_t));
+    renderer = calloc(1, sizeof(video_renderer_gstreamer_t));
     assert(renderer);
 
     gst_init(NULL, NULL);
 
-    renderer->logger = logger;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &video_renderer_gstreamer_funcs;
+    renderer->base.type = VIDEO_RENDERER_GSTREAMER;
 
     assert(check_plugins ());
 
@@ -70,15 +74,17 @@ video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t backgr
     renderer->appsrc = gst_bin_get_by_name (GST_BIN (renderer->pipeline), "video_source");
     renderer->sink = gst_bin_get_by_name (GST_BIN (renderer->pipeline), "video_sink");
 
-    return renderer;
+    return &renderer->base;
 }
 
-void video_renderer_start(video_renderer_t *renderer) {
-    //g_signal_connect( renderer->pipeline, "deep-notify", G_CALLBACK(gst_object_default_deep_notify ), NULL );
-    gst_element_set_state (renderer->pipeline, GST_STATE_PLAYING);
+static void video_renderer_gstreamer_start(video_renderer_t *renderer) {
+    video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
+    //g_signal_connect( r->pipeline, "deep-notify", G_CALLBACK(gst_object_default_deep_notify ), NULL );
+    gst_element_set_state (r->pipeline, GST_STATE_PLAYING);
 }
 
-void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char* data, int data_len, uint64_t pts, int type) {
+static void video_renderer_gstreamer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts, int type) {
+    video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     GstBuffer *buffer;
 
     assert(data_len != 0);
@@ -87,22 +93,31 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
     assert(buffer != NULL);
     GST_BUFFER_DTS(buffer) = (GstClockTime)pts;
     gst_buffer_fill(buffer, 0, data, data_len);
-    gst_app_src_push_buffer (GST_APP_SRC(renderer->appsrc), buffer);
+    gst_app_src_push_buffer (GST_APP_SRC(r->appsrc), buffer);
 }
 
-void video_renderer_flush(video_renderer_t *renderer) {
+void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
 
 }
 
-void video_renderer_destroy(video_renderer_t *renderer) {
-    gst_app_src_end_of_stream (GST_APP_SRC(renderer->appsrc));
-    gst_element_set_state (renderer->pipeline, GST_STATE_NULL);
-    gst_object_unref (renderer->pipeline);
+void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
+    video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
+    gst_app_src_end_of_stream (GST_APP_SRC(r->appsrc));
+    gst_element_set_state (r->pipeline, GST_STATE_NULL);
+    gst_object_unref (r->pipeline);
     if (renderer) {
         free(renderer);
     }
 }
 
-void video_renderer_update_background(video_renderer_t *renderer, int type) {
+void video_renderer_gstreamer_update_background(video_renderer_t *renderer, int type) {
 
 }
+
+static const video_renderer_funcs_t video_renderer_gstreamer_funcs = {
+    .start = video_renderer_gstreamer_start,
+    .render_buffer = video_renderer_gstreamer_render_buffer,
+    .flush = video_renderer_gstreamer_flush,
+    .destroy = video_renderer_gstreamer_destroy,
+    .update_background = video_renderer_gstreamer_update_background,
+};

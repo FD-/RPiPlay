@@ -26,34 +26,46 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-struct audio_renderer_s {
-    logger_t *logger;
-};
+typedef struct audio_renderer_dummy_s {
+    audio_renderer_t base;
+} audio_renderer_dummy_t;
 
-audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
-    audio_renderer_t *renderer;
-    renderer = calloc(1, sizeof(audio_renderer_t));
+static const audio_renderer_funcs_t audio_renderer_dummy_funcs;
+
+audio_renderer_t *audio_renderer_dummy_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+    audio_renderer_dummy_t *renderer;
+    renderer = calloc(1, sizeof(audio_renderer_dummy_t));
     if (!renderer) {
         return NULL;
     }
-    renderer->logger = logger;
-    return renderer;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &audio_renderer_dummy_funcs;
+    renderer->base.type = AUDIO_RENDERER_DUMMY;
+    return &renderer->base;
 }
 
-void audio_renderer_start(audio_renderer_t *renderer) {
+static void audio_renderer_dummy_start(audio_renderer_t *renderer) {
 }
 
-void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char* data, int data_len, uint64_t pts) {
+static void audio_renderer_dummy_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts) {
 }
 
-void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
+static void audio_renderer_dummy_set_volume(audio_renderer_t *renderer, float volume) {
 }
 
-void audio_renderer_flush(audio_renderer_t *renderer) {
+static void audio_renderer_dummy_flush(audio_renderer_t *renderer) {
 }
 
-void audio_renderer_destroy(audio_renderer_t *renderer) {
+static void audio_renderer_dummy_destroy(audio_renderer_t *renderer) {
     if (renderer) {
         free(renderer);
     }
 }
+
+static const audio_renderer_funcs_t audio_renderer_dummy_funcs = {
+    .start = audio_renderer_dummy_start,
+    .render_buffer = audio_renderer_dummy_render_buffer,
+    .set_volume = audio_renderer_dummy_set_volume,
+    .flush = audio_renderer_dummy_flush,
+    .destroy = audio_renderer_dummy_destroy,
+};

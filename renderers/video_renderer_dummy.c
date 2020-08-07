@@ -26,35 +26,47 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-struct video_renderer_s {
-    logger_t *logger;
-};
+typedef struct video_renderer_dummy_s {
+    video_renderer_t base;
+} video_renderer_dummy_t;
 
-video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
-    video_renderer_t *renderer;
-    renderer = calloc(1, sizeof(video_renderer_t));
+static const video_renderer_funcs_t video_renderer_dummy_funcs;
+
+video_renderer_t *video_renderer_dummy_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+    video_renderer_dummy_t *renderer;
+    renderer = calloc(1, sizeof(video_renderer_dummy_t));
     if (!renderer) {
         return NULL;
     }
-    renderer->logger = logger;
-    return renderer;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &video_renderer_dummy_funcs;
+    renderer->base.type = VIDEO_RENDERER_DUMMY;
+    return &renderer->base;
 }
 
-void video_renderer_start(video_renderer_t *renderer) {
+static void video_renderer_dummy_start(video_renderer_t *renderer) {
 }
 
-void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char* data, int data_len, uint64_t pts, int type) {
+static void video_renderer_dummy_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts, int type) {
 }
 
-void video_renderer_flush(video_renderer_t *renderer) {
+static void video_renderer_dummy_flush(video_renderer_t *renderer) {
 }
 
-void video_renderer_destroy(video_renderer_t *renderer) {
+static void video_renderer_dummy_destroy(video_renderer_t *renderer) {
     if (renderer) {
         free(renderer);
     }
 }
 
-void video_renderer_update_background(video_renderer_t *renderer, int type) {
+static void video_renderer_dummy_update_background(video_renderer_t *renderer, int type) {
 
 }
+
+static const video_renderer_funcs_t video_renderer_dummy_funcs = {
+    .start = video_renderer_dummy_start,
+    .render_buffer = video_renderer_dummy_render_buffer,
+    .flush = video_renderer_dummy_flush,
+    .destroy = video_renderer_dummy_destroy,
+    .update_background = video_renderer_dummy_update_background,
+};

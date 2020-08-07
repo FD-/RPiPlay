@@ -41,8 +41,8 @@
 #define LAYER_VIDEO 2
 #define LAYER_BACKGROUND 1
 
-struct video_renderer_s {
-    logger_t *logger;
+typedef struct video_renderer_rpi_s {
+    video_renderer_t base;
     bool low_latency;
     background_mode_t background_mode;
 
@@ -60,12 +60,13 @@ struct video_renderer_s {
 
     uint64_t first_packet_time;
     uint64_t input_frames;
-};
+} video_renderer_rpi_t;
 
+static const video_renderer_funcs_t video_renderer_rpi_funcs;
 
 /* From: https://github.com/popcornmix/omxplayer/blob/master/omxplayer.cpp#L455
  * Licensed under the GPLv2 */
-void video_renderer_render_background(video_renderer_t *renderer) {
+static void video_renderer_rpi_render_background(video_renderer_rpi_t *renderer) {
     if (renderer->background_element) {
         return;
     }
@@ -101,7 +102,7 @@ void video_renderer_render_background(video_renderer_t *renderer) {
     vc_dispmanx_update_submit_sync(update);
 }
 
-void video_renderer_remove_background(video_renderer_t *renderer) {
+static void video_renderer_rpi_remove_background(video_renderer_rpi_t *renderer) {
     if (renderer->background_element) {
         DISPMANX_UPDATE_HANDLE_T update = vc_dispmanx_update_start(0);
         vc_dispmanx_element_remove(update, renderer->background_element);
@@ -110,29 +111,30 @@ void video_renderer_remove_background(video_renderer_t *renderer) {
     renderer->background_element = 0;
 }
 
-void video_renderer_update_background(video_renderer_t *renderer, int type) {
+static void video_renderer_rpi_update_background(video_renderer_t *renderer, int type) {
+    video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     if (type < 0) {
-        renderer->background_visits--;
+        r->background_visits--;
     } else if (type > 0) {
-        renderer->background_visits++;
+        r->background_visits++;
     }
-    if (renderer->background_visits < 0) {
-        renderer->background_visits = 0;
+    if (r->background_visits < 0) {
+        r->background_visits = 0;
     }
 
-    if (renderer->background_mode == BACKGROUND_MODE_ON) {
-        video_renderer_render_background(renderer);
-    } else if (renderer->background_mode == BACKGROUND_MODE_AUTO) {
+    if (r->background_mode == BACKGROUND_MODE_ON) {
+        video_renderer_rpi_render_background(r);
+    } else if (r->background_mode == BACKGROUND_MODE_AUTO) {
         // Show background when connection is made and hide background when all connections are gone
-        if (renderer->background_visits > 0) {
-            video_renderer_render_background(renderer);
+        if (r->background_visits > 0) {
+            video_renderer_rpi_render_background(r);
         } else {
-            video_renderer_remove_background(renderer);
+            video_renderer_rpi_remove_background(r);
         }
     }
 }
 
-void video_renderer_destroy_decoder(video_renderer_t *renderer) {
+static void video_renderer_rpi_destroy_decoder(video_renderer_rpi_t *renderer) {
     ilclient_disable_tunnel(&renderer->tunnels[0]);
     ilclient_disable_tunnel(&renderer->tunnels[1]);
     ilclient_disable_tunnel(&renderer->tunnels[2]);
@@ -147,18 +149,18 @@ void video_renderer_destroy_decoder(video_renderer_t *renderer) {
     ilclient_destroy(renderer->client);
 }
 
-void omx_event_handler(void *userdata, COMPONENT_T *comp, OMX_U32 data) {
-    video_renderer_t *renderer = (video_renderer_t *) userdata;
-    logger_log(renderer->logger, LOGGER_DEBUG, "Video renderer config change: %p: %d", comp, data);
+static void omx_event_handler(void *userdata, COMPONENT_T *comp, OMX_U32 data) {
+    video_renderer_rpi_t *renderer = (video_renderer_rpi_t *) userdata;
+    logger_log(renderer->base.logger, LOGGER_DEBUG, "Video renderer config change: %p: %d", comp, data);
 }
 
-int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
+static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int rotation) {
     memset(renderer->components, 0, sizeof(renderer->components));
     memset(renderer->tunnels, 0, sizeof(renderer->tunnels));
 
     bcm_host_init();
 
-    video_renderer_update_background(renderer, 0);
+    video_renderer_rpi_update_background(&renderer->base, 0);
 
     if ((renderer->client = ilclient_init()) == NULL) {
         return -3;
@@ -172,7 +174,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     // Create video_decode
     if (ilclient_create_component(renderer->client, &renderer->video_decoder, "video_decode",
                                   ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_ENABLE_INPUT_BUFFERS) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -14;
     }
     renderer->components[0] = renderer->video_decoder;
@@ -180,7 +182,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     // Create video_renderer
     if (ilclient_create_component(renderer->client, &renderer->video_renderer, "video_render",
                                   ILCLIENT_DISABLE_ALL_PORTS) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -14;
     }
     renderer->components[1] = renderer->video_renderer;
@@ -195,7 +197,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     request_callback.bEnable = OMX_TRUE;
     if (OMX_SetConfig(ilclient_get_handle(renderer->video_decoder), OMX_IndexConfigRequestCallback,
                       &request_callback) != OMX_ErrorNone) {
-        logger_log(renderer->logger, LOGGER_DEBUG, "Could not request video stall callback");
+        logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not request video stall callback");
         return -14;
     }
     ilclient_set_configchanged_callback(renderer->client, omx_event_handler, renderer);
@@ -203,7 +205,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     // Create clock
     if (ilclient_create_component(renderer->client, &renderer->clock, "clock",
                                   ILCLIENT_DISABLE_ALL_PORTS) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -14;
     }
     renderer->components[2] = renderer->clock;
@@ -216,7 +218,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     active_ref_clock.eClock = OMX_TIME_RefClockVideo;
     if (OMX_SetConfig(ilclient_get_handle(renderer->clock), OMX_IndexConfigTimeActiveRefClock,
                       &active_ref_clock) != OMX_ErrorNone) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -13;
     }
 
@@ -229,14 +231,14 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     clock_state.nWaitMask = 1;
     if (OMX_SetParameter(ilclient_get_handle(renderer->clock), OMX_IndexConfigTimeClockState,
                          &clock_state) != OMX_ErrorNone) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -13;
     }
 
     // Create video_scheduler
     if (ilclient_create_component(renderer->client, &renderer->video_scheduler, "video_scheduler",
                                   ILCLIENT_DISABLE_ALL_PORTS) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -14;
     }
     renderer->components[3] = renderer->video_scheduler;
@@ -258,14 +260,14 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
 
     if (OMX_SetConfig(ilclient_get_handle(renderer->video_renderer), OMX_IndexConfigDisplayRegion,
                       &display_region) != OMX_ErrorNone) {
-        logger_log(renderer->logger, LOGGER_DEBUG, "Could not set renderer to fullscreen");
-        video_renderer_destroy_decoder(renderer);
+        logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not set renderer to fullscreen");
+        video_renderer_rpi_destroy_decoder(renderer);
         return -13;
     }
 
     // Setup clock tunnel
     if (ilclient_setup_tunnel(&renderer->tunnels[2], 0, 0) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -15;
     }
 
@@ -277,7 +279,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
 	    // Check the rotation here
 	    if (rotation != 90 && rotation != -90 && rotation != 180 && rotation != -180 && rotation != 270 && rotation != -270) {
 		printf("Error: Rotation must be +/- 0,90,180,270\n");
-		video_renderer_destroy_decoder(renderer);
+		video_renderer_rpi_destroy_decoder(renderer);
 		return -15;
 	    }
 	    omx_rotation.nRotation = rotation;
@@ -287,7 +289,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
 				 &omx_rotation);
 	    if (error != OMX_ErrorNone) {
 		printf("Error: %x\n", error);
-		video_renderer_destroy_decoder(renderer);
+		video_renderer_rpi_destroy_decoder(renderer);
 		return -15;
 	    }
     }
@@ -304,7 +306,7 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     if (OMX_SetParameter(ilclient_get_handle(renderer->video_decoder), OMX_IndexParamVideoPortFormat,
                          &format) != OMX_ErrorNone ||
         ilclient_enable_port_buffers(renderer->video_decoder, 130, NULL, NULL, NULL) != 0) {
-        video_renderer_destroy_decoder(renderer);
+        video_renderer_rpi_destroy_decoder(renderer);
         return -15;
     }
 
@@ -313,47 +315,54 @@ int video_renderer_init_decoder(video_renderer_t *renderer, int rotation) {
     return 1;
 }
 
-video_renderer_t *video_renderer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
-    video_renderer_t *renderer;
-    renderer = calloc(1, sizeof(video_renderer_t));
+video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+    video_renderer_rpi_t *renderer;
+    renderer = calloc(1, sizeof(video_renderer_rpi_t));
     if (!renderer) {
         return NULL;
     }
 
-    renderer->logger = logger;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &video_renderer_rpi_funcs;
+    renderer->base.type = VIDEO_RENDERER_RPI;
     renderer->low_latency = low_latency;
     renderer->background_mode = background_mode;
 
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
 
-    if (video_renderer_init_decoder(renderer, rotation) != 1) {
+    if (video_renderer_rpi_init_decoder(renderer, rotation) != 1) {
         free(renderer);
         renderer = NULL;
     }
 
-    return renderer;
+    return &renderer->base;
 }
 
-ILCLIENT_T *video_renderer_get_ilclient(video_renderer_t *renderer) {
+// Not static because the audio renderer may need to refer to it
+ILCLIENT_T *video_renderer_rpi_get_ilclient(video_renderer_rpi_t *renderer) {
     return renderer->client;
 }
 
-COMPONENT_T *video_renderer_get_clock(video_renderer_t *renderer) {
+// Not static because the audio renderer may need to refer to it
+COMPONENT_T *video_renderer_rpi_get_clock(video_renderer_rpi_t *renderer) {
     return renderer->clock;
 }
 
-void video_renderer_start(video_renderer_t *renderer) {
-    ilclient_change_component_state(renderer->clock, OMX_StateExecuting);
-    ilclient_change_component_state(renderer->video_decoder, OMX_StateExecuting);
+static void video_renderer_rpi_start(video_renderer_t *renderer) {
+    video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
+    ilclient_change_component_state(r->clock, OMX_StateExecuting);
+    ilclient_change_component_state(r->video_decoder, OMX_StateExecuting);
 }
 
-void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len,
+static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len,
                                   uint64_t pts, int type) {
     if (data_len == 0) return;
 
+    video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
+
     logger_log(renderer->logger, LOGGER_DEBUG, "Got h264 data of %d bytes", data_len);
-    renderer->input_frames++;
+    r->input_frames++;
 
     uint8_t *modified_data = NULL;
 
@@ -391,29 +400,29 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
         h264_free(h);
     }
 
-    if (ilclient_remove_event(renderer->video_decoder, OMX_EventPortSettingsChanged, 131, 0, 0, 1) == 0) {
+    if (ilclient_remove_event(r->video_decoder, OMX_EventPortSettingsChanged, 131, 0, 0, 1) == 0) {
         logger_log(renderer->logger, LOGGER_DEBUG, "Port settings changed!!");
 
-        uint64_t time_diff = raop_ntp_get_local_time(ntp) - renderer->first_packet_time;
+        uint64_t time_diff = raop_ntp_get_local_time(ntp) - r->first_packet_time;
         logger_log(renderer->logger, LOGGER_DEBUG, "Video pipeline delay is %llu frames or %llu us",
-                   renderer->input_frames, time_diff);
+                   r->input_frames, time_diff);
 
-        if (ilclient_setup_tunnel(&renderer->tunnels[0], 0, 0) != 0) {
+        if (ilclient_setup_tunnel(&r->tunnels[0], 0, 0) != 0) {
             logger_log(renderer->logger, LOGGER_ERR, "Could not setup decoder tunnel");
         }
 
-        ilclient_change_component_state(renderer->video_scheduler, OMX_StateExecuting);
+        ilclient_change_component_state(r->video_scheduler, OMX_StateExecuting);
 
-        if (ilclient_setup_tunnel(&renderer->tunnels[1], 0, 1000) != 0) {
+        if (ilclient_setup_tunnel(&r->tunnels[1], 0, 1000) != 0) {
             logger_log(renderer->logger, LOGGER_ERR, "Could not setup scheduler tunnel");
         }
 
-        ilclient_change_component_state(renderer->video_renderer, OMX_StateExecuting);
+        ilclient_change_component_state(r->video_renderer, OMX_StateExecuting);
     }
 
     int offset = 0;
     while (offset < data_len) {
-        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(renderer->video_decoder, 130, 0);
+        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->video_decoder, 130, 0);
         if (buffer == NULL) logger_log(renderer->logger, LOGGER_ERR, "Got NULL buffer!");
         if (!buffer)
             break;
@@ -421,7 +430,7 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
         int64_t video_delay = ((int64_t) raop_ntp_get_local_time(ntp)) - ((int64_t) pts);
         logger_log(renderer->logger, LOGGER_DEBUG, "Video delay is %lld", video_delay);
         if (video_delay > 100000)
-            renderer->first_packet_time = 0;
+            r->first_packet_time = 0;
 
         int chunk_size = MIN(data_len - offset, buffer->nAllocLen);
         memcpy(buffer->pBuffer, data + offset, chunk_size);
@@ -431,11 +440,11 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
         buffer->nFilledLen = chunk_size;
         buffer->nOffset = 0;
 
-        if (!renderer->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
-        if (renderer->first_packet_time == 0) {
+        if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
+        if (r->first_packet_time == 0) {
             buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
-            renderer->first_packet_time = raop_ntp_get_local_time(ntp);
-            if (!renderer->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(renderer->first_packet_time);
+            r->first_packet_time = raop_ntp_get_local_time(ntp);
+            if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
         }
 
         // Mark the last buffer if we had to split the data (probably not necessary)
@@ -443,7 +452,7 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
             buffer->nFlags = OMX_BUFFERFLAG_ENDOFFRAME;
         }
 
-        if (OMX_EmptyThisBuffer(ilclient_get_handle(renderer->video_decoder), buffer) != OMX_ErrorNone) {
+        if (OMX_EmptyThisBuffer(ilclient_get_handle(r->video_decoder), buffer) != OMX_ErrorNone) {
             logger_log(renderer->logger, LOGGER_ERR, "Video decoder refused processing buffer");
         }
 
@@ -456,31 +465,41 @@ void video_renderer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, u
     }
 }
 
-void video_renderer_flush(video_renderer_t *renderer) {
-    OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(renderer->video_decoder, 130, 1);
+static void video_renderer_rpi_flush(video_renderer_t *renderer) {
+    video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
+    OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->video_decoder, 130, 1);
     if (buffer == NULL) logger_log(renderer->logger, LOGGER_ERR, "Got NULL buffer while flushing!");
     if (!buffer)
         return;
 
     buffer->nFilledLen = 0;
     buffer->nFlags = OMX_BUFFERFLAG_TIME_UNKNOWN | OMX_BUFFERFLAG_EOS;
-    if (OMX_EmptyThisBuffer(ilclient_get_handle(renderer->video_decoder), buffer) != OMX_ErrorNone) {
+    if (OMX_EmptyThisBuffer(ilclient_get_handle(r->video_decoder), buffer) != OMX_ErrorNone) {
         logger_log(renderer->logger, LOGGER_ERR, "Video decoder refused processing buffer while flushing!");
     }
 
     // Wait until EOS reaches renderer
-    ilclient_wait_for_event(renderer->video_renderer, OMX_EventBufferFlag, 90, 0, OMX_BUFFERFLAG_EOS, 0,
+    ilclient_wait_for_event(r->video_renderer, OMX_EventBufferFlag, 90, 0, OMX_BUFFERFLAG_EOS, 0,
                             ILCLIENT_BUFFER_FLAG_EOS, -1);
-    ilclient_flush_tunnels(renderer->tunnels, 0);
+    ilclient_flush_tunnels(r->tunnels, 0);
 
-    renderer->first_packet_time = 0;
+    r->first_packet_time = 0;
 }
 
-void video_renderer_destroy(video_renderer_t *renderer) {
+static void video_renderer_rpi_destroy(video_renderer_t *renderer) {
+    video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     if (renderer) {
         // Only flush if data was sent through, gets stuck otherwise
-        if (renderer->first_packet_time) video_renderer_flush(renderer);
-        video_renderer_destroy_decoder(renderer);
+        if (r->first_packet_time) video_renderer_rpi_flush(renderer);
+        video_renderer_rpi_destroy_decoder(r);
         free(renderer);
     }
 }
+
+static const video_renderer_funcs_t video_renderer_rpi_funcs = {
+    .start = video_renderer_rpi_start,
+    .render_buffer = video_renderer_rpi_render_buffer,
+    .flush = video_renderer_rpi_flush,
+    .destroy = video_renderer_rpi_destroy,
+    .update_background = video_renderer_rpi_update_background,
+};

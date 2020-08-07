@@ -38,11 +38,11 @@
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-extern ILCLIENT_T *video_renderer_get_ilclient(video_renderer_t *renderer);
-extern COMPONENT_T *video_renderer_get_clock(video_renderer_t *renderer);
+extern ILCLIENT_T *video_renderer_rpi_get_ilclient(video_renderer_t *renderer);
+extern COMPONENT_T *video_renderer_rpi_get_clock(video_renderer_t *renderer);
 
-struct audio_renderer_s {
-    logger_t *logger;
+typedef struct audio_renderer_rpi_s {
+    audio_renderer_t base;
     video_renderer_t *video_renderer;
     bool low_latency;
 
@@ -58,17 +58,19 @@ struct audio_renderer_s {
     uint64_t first_packet_time;
     uint64_t last_packet_time;
     uint64_t input_frames;
-};
+} audio_renderer_rpi_t;
 
-void audio_renderer_destroy_decoder(audio_renderer_t *renderer) {
+static const audio_renderer_funcs_t audio_renderer_rpi_funcs;
+
+static void audio_renderer_rpi_destroy_decoder(audio_renderer_rpi_t *renderer) {
     aacDecoder_Close(renderer->audio_decoder);
 }
 
-int audio_renderer_init_decoder(audio_renderer_t *renderer) {
+static int audio_renderer_rpi_init_decoder(audio_renderer_rpi_t *renderer) {
     int ret = 0;
     renderer->audio_decoder = aacDecoder_Open(TT_MP4_RAW, 1);
     if (renderer->audio_decoder == NULL) {
-        logger_log(renderer->logger, LOGGER_ERR, "aacDecoder open faild!");
+        logger_log(renderer->base.logger, LOGGER_ERR, "aacDecoder open faild!");
         return -1;
     }
     /* ASC config binary data */
@@ -77,22 +79,22 @@ int audio_renderer_init_decoder(audio_renderer_t *renderer) {
     static UINT conf_len = sizeof(eld_conf);
     ret = aacDecoder_ConfigRaw(renderer->audio_decoder, conf, &conf_len);
     if (ret != AAC_DEC_OK) {
-        logger_log(renderer->logger, LOGGER_ERR, "Unable to set configRaw");
+        logger_log(renderer->base.logger, LOGGER_ERR, "Unable to set configRaw");
         return -2;
     }
     CStreamInfo *aac_stream_info = aacDecoder_GetStreamInfo(renderer->audio_decoder);
     if (aac_stream_info == NULL) {
-        logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_GetStreamInfo failed!");
+        logger_log(renderer->base.logger, LOGGER_ERR, "aacDecoder_GetStreamInfo failed!");
         return -3;
     }
 
-    logger_log(renderer->logger, LOGGER_DEBUG, "> stream info: channel = %d\tsample_rate = %d\tframe_size = %d\taot = %d\tbitrate = %d",   \
+    logger_log(renderer->base.logger, LOGGER_DEBUG, "> stream info: channel = %d\tsample_rate = %d\tframe_size = %d\taot = %d\tbitrate = %d",   \
             aac_stream_info->channelConfig, aac_stream_info->aacSampleRate,
             aac_stream_info->aacSamplesPerFrame, aac_stream_info->aot, aac_stream_info->bitRate);
     return 1;
 }
 
-void audio_renderer_destroy_renderer(audio_renderer_t *renderer) {
+static void audio_renderer_rpi_destroy_renderer(audio_renderer_rpi_t *renderer) {
     ilclient_disable_tunnel(&renderer->tunnels[0]);
     ilclient_disable_port_buffers(renderer->audio_renderer, 100, NULL, NULL, NULL);
     ilclient_teardown_tunnels(renderer->tunnels);
@@ -107,11 +109,11 @@ void audio_renderer_destroy_renderer(audio_renderer_t *renderer) {
     }
 }
 
-int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *video_renderer, audio_device_t device) {
+static int audio_renderer_rpi_init_renderer(audio_renderer_rpi_t *renderer, video_renderer_t *video_renderer, audio_device_t device) {
     memset(renderer->components, 0, sizeof(renderer->components));
 
     if (video_renderer) {
-        renderer->client = video_renderer_get_ilclient(video_renderer);
+        renderer->client = video_renderer_rpi_get_ilclient(video_renderer);
     } else {
         bcm_host_init();
         if ((renderer->client = ilclient_init()) == NULL) {
@@ -126,13 +128,13 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
     // Create audio_renderer
     if (ilclient_create_component(renderer->client, &renderer->audio_renderer, "audio_render",
                                   ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_ENABLE_INPUT_BUFFERS) != 0) {
-        audio_renderer_destroy_renderer(renderer);
+        audio_renderer_rpi_destroy_renderer(renderer);
         return -14;
     }
     renderer->components[0] = renderer->audio_renderer;
 
     if (video_renderer) {
-        renderer->clock = video_renderer_get_clock(video_renderer);
+        renderer->clock = video_renderer_rpi_get_clock(video_renderer);
 
         // Tell the audio render component that it's not the clock master
         OMX_CONFIG_BOOLEANTYPE audio_is_clock_source;
@@ -142,15 +144,15 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
         audio_is_clock_source.bEnabled = OMX_FALSE;
         if (OMX_SetConfig(ilclient_get_handle(renderer->audio_renderer), OMX_IndexConfigBrcmClockReferenceSource,
                           &audio_is_clock_source) != OMX_ErrorNone) {
-            logger_log(renderer->logger, LOGGER_DEBUG, "Could not disable audio render as clock master");
-            audio_renderer_destroy_renderer(renderer);
+            logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not disable audio render as clock master");
+            audio_renderer_rpi_destroy_renderer(renderer);
             return -13;
         }
     } else {
         // Create clock if no video renderer is used
         if (ilclient_create_component(renderer->client, &renderer->clock, "clock",
                                       ILCLIENT_DISABLE_ALL_PORTS) != 0) {
-            audio_renderer_destroy_decoder(renderer);
+            audio_renderer_rpi_destroy_decoder(renderer);
             return -14;
         }
         renderer->components[1] = renderer->clock;
@@ -164,7 +166,7 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
         clock_state.nWaitMask = 1;
         if (OMX_SetParameter(ilclient_get_handle(renderer->clock), OMX_IndexConfigTimeClockState,
                              &clock_state) != OMX_ErrorNone) {
-            audio_renderer_destroy_decoder(renderer);
+            audio_renderer_rpi_destroy_decoder(renderer);
             return -13;
         }
     }
@@ -174,7 +176,7 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
 
     // Setup clock tunnel
     if (ilclient_setup_tunnel(&renderer->tunnels[0], 0, 0) != 0) {
-        audio_renderer_destroy_decoder(renderer);
+        audio_renderer_rpi_destroy_decoder(renderer);
         return -15;
     }
 
@@ -188,8 +190,8 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
     port_format.eEncoding = OMX_AUDIO_CodingPCM;
     if (OMX_SetParameter(ilclient_get_handle(renderer->audio_renderer), OMX_IndexParamAudioPortFormat,
                          &port_format) != OMX_ErrorNone) {
-        logger_log(renderer->logger, LOGGER_DEBUG, "Could not set pcm format");
-        audio_renderer_destroy_renderer(renderer);
+        logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not set pcm format");
+        audio_renderer_rpi_destroy_renderer(renderer);
         return -13;
     }
 
@@ -209,8 +211,8 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
 
     if (OMX_SetConfig(ilclient_get_handle(renderer->audio_renderer), OMX_IndexParamAudioPcm,
                       &pcm_mode) != OMX_ErrorNone) {
-        logger_log(renderer->logger, LOGGER_DEBUG, "Could not set pcm config");
-        audio_renderer_destroy_renderer(renderer);
+        logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not set pcm config");
+        audio_renderer_rpi_destroy_renderer(renderer);
         return -13;
     }
 
@@ -224,8 +226,8 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
 
     if (OMX_SetConfig(ilclient_get_handle(renderer->audio_renderer), OMX_IndexConfigBrcmAudioDestination,
                       &audio_destination) != OMX_ErrorNone) {
-        logger_log(renderer->logger, LOGGER_DEBUG, "Could not set audio device");
-        audio_renderer_destroy_renderer(renderer);
+        logger_log(renderer->base.logger, LOGGER_DEBUG, "Could not set audio device");
+        audio_renderer_rpi_destroy_renderer(renderer);
         return -14;
     }
 
@@ -234,53 +236,63 @@ int audio_renderer_init_renderer(audio_renderer_t *renderer, video_renderer_t *v
     return 1;
 }
 
-audio_renderer_t *audio_renderer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
-    audio_renderer_t *renderer;
-    renderer = calloc(1, sizeof(audio_renderer_t));
+audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+    audio_renderer_rpi_t *renderer;
+    renderer = calloc(1, sizeof(audio_renderer_rpi_t));
     if (!renderer) {
         return NULL;
     }
-    renderer->logger = logger;
+    renderer->base.logger = logger;
+    renderer->base.funcs = &audio_renderer_rpi_funcs;
+    renderer->base.type = AUDIO_RENDERER_RPI;
+    // Only refer to an existing video renderer if it's an RPI renderer,
+    // in which case we have to share resources
+    if (video_renderer && video_renderer->type != VIDEO_RENDERER_RPI) {
+        video_renderer = NULL;
+    }
     renderer->video_renderer = video_renderer;
     renderer->low_latency = low_latency;
 
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
 
-    if (audio_renderer_init_decoder(renderer) != 1) {
+    if (audio_renderer_rpi_init_decoder(renderer) != 1) {
         free(renderer);
         renderer = NULL;
     }
 
-    if (audio_renderer_init_renderer(renderer, video_renderer, device) != 1) {
-        audio_renderer_destroy_decoder(renderer);
+    if (audio_renderer_rpi_init_renderer(renderer, video_renderer, device) != 1) {
+        audio_renderer_rpi_destroy_decoder(renderer);
         free(renderer);
         renderer = NULL;
     }
 
-    return renderer;
+    return &renderer->base;
 }
 
-void audio_renderer_start(audio_renderer_t *renderer) {
-    if (!renderer->video_renderer) {
+static void audio_renderer_rpi_start(audio_renderer_t *renderer) {
+    audio_renderer_rpi_t *r = (audio_renderer_rpi_t *)renderer;
+    if (!r->video_renderer) {
         // If no video renderer is used, we're responsible for starting the clock here
-        ilclient_change_component_state(renderer->clock, OMX_StateExecuting);
+        ilclient_change_component_state(r->clock, OMX_StateExecuting);
     }
 
-    ilclient_change_component_state(renderer->audio_renderer, OMX_StateIdle);
-    ilclient_enable_port_buffers(renderer->audio_renderer, 100, NULL, NULL, NULL);
-    ilclient_change_component_state(renderer->audio_renderer, OMX_StateExecuting);
+    ilclient_change_component_state(r->audio_renderer, OMX_StateIdle);
+    ilclient_enable_port_buffers(r->audio_renderer, 100, NULL, NULL, NULL);
+    ilclient_change_component_state(r->audio_renderer, OMX_StateExecuting);
 }
 
 #ifdef DUMP_AUDIO
 static FILE* file_pcm = NULL;
 #endif
 
-void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char* data, int data_len, uint64_t pts) {
+static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts) {
     if (data_len == 0) return;
+    
+    audio_renderer_rpi_t *r = (audio_renderer_rpi_t *)renderer;
 
     logger_log(renderer->logger, LOGGER_DEBUG, "Got AAC data of %d bytes", data_len);
-    renderer->input_frames++;
+    r->input_frames++;
 
     // We assume that every buffer contains exactly 1 frame.
 
@@ -289,14 +301,14 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
     UCHAR *p_buffer[1] = {data};
     UINT buffer_size = data_len;
     UINT bytes_valid = data_len;
-    error = aacDecoder_Fill(renderer->audio_decoder, p_buffer, &buffer_size, &bytes_valid);
+    error = aacDecoder_Fill(r->audio_decoder, p_buffer, &buffer_size, &bytes_valid);
     if (error != AAC_DEC_OK) {
         logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_Fill error : %x", error);
     }
 
     INT time_data_size = 4 * 480;
     INT_PCM *p_time_data = malloc(time_data_size); // The buffer for the decoded AAC frames
-    error = aacDecoder_DecodeFrame(renderer->audio_decoder, p_time_data, time_data_size, 0);
+    error = aacDecoder_DecodeFrame(r->audio_decoder, p_time_data, time_data_size, 0);
     if (error != AAC_DEC_OK) {
         logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_DecodeFrame error : 0x%x", error);
     }
@@ -314,9 +326,9 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
         int64_t audio_delay = ((int64_t) raop_ntp_get_local_time(ntp)) - ((int64_t) pts);
         logger_log(renderer->logger, LOGGER_DEBUG, "Audio delay is %lld", audio_delay);
         if (audio_delay > 100000)
-            renderer->first_packet_time = 0;
+            r->first_packet_time = 0;
 
-        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(renderer->audio_renderer, 100, 0);
+        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->audio_renderer, 100, 0);
         if (!buffer)
             break;
 
@@ -327,14 +339,14 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
         buffer->nFilledLen = chunk_size;
         buffer->nOffset = 0;
 
-        if (!renderer->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
-        if (renderer->first_packet_time == 0) {
+        if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
+        if (r->first_packet_time == 0) {
             buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
-            renderer->first_packet_time = raop_ntp_get_local_time(ntp);
-            if (!renderer->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(renderer->first_packet_time);
+            r->first_packet_time = raop_ntp_get_local_time(ntp);
+            if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
         }
 
-        if (OMX_EmptyThisBuffer(ILC_GET_HANDLE(renderer->audio_renderer), buffer) != OMX_ErrorNone) {
+        if (OMX_EmptyThisBuffer(ILC_GET_HANDLE(r->audio_renderer), buffer) != OMX_ErrorNone) {
             logger_log(renderer->logger, LOGGER_ERR, "Audio renderer refused processing buffer");
         }
     }
@@ -342,7 +354,8 @@ void audio_renderer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, u
     free(p_time_data);
 }
 
-void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
+static void audio_renderer_rpi_set_volume(audio_renderer_t *renderer, float volume) {
+    audio_renderer_rpi_t *r = (audio_renderer_rpi_t *)renderer;
     OMX_AUDIO_CONFIG_VOLUMETYPE audio_volume;
     memset(&audio_volume, 0, sizeof(audio_volume));
     audio_volume.nSize = sizeof(OMX_AUDIO_CONFIG_VOLUMETYPE);
@@ -355,21 +368,30 @@ void audio_renderer_set_volume(audio_renderer_t *renderer, float volume) {
     // but without it, volume is too high.
     audio_volume.sVolume.nValue = volume * 200.0;
 
-    if (OMX_SetConfig(ilclient_get_handle(renderer->audio_renderer), OMX_IndexConfigAudioVolume,
+    if (OMX_SetConfig(ilclient_get_handle(r->audio_renderer), OMX_IndexConfigAudioVolume,
                       &audio_volume) != OMX_ErrorNone) {
         logger_log(renderer->logger, LOGGER_DEBUG, "Could not set audio volume");
     }
 }
 
-void audio_renderer_flush(audio_renderer_t *renderer) {
+static void audio_renderer_rpi_flush(audio_renderer_t *renderer) {
     // TODO
 }
 
-void audio_renderer_destroy(audio_renderer_t *renderer) {
+static void audio_renderer_rpi_destroy(audio_renderer_t *renderer) {
     if (renderer) {
-        audio_renderer_flush(renderer);
-        audio_renderer_destroy_decoder(renderer);
-        audio_renderer_destroy_renderer(renderer);
+        audio_renderer_rpi_t *r = (audio_renderer_rpi_t *)renderer;
+        audio_renderer_rpi_flush(renderer);
+        audio_renderer_rpi_destroy_decoder(r);
+        audio_renderer_rpi_destroy_renderer(r);
         free(renderer);
     }
 }
+
+static const audio_renderer_funcs_t audio_renderer_rpi_funcs = {
+    .start = audio_renderer_rpi_start,
+    .render_buffer = audio_renderer_rpi_render_buffer,
+    .set_volume = audio_renderer_rpi_set_volume,
+    .flush = audio_renderer_rpi_flush,
+    .destroy = audio_renderer_rpi_destroy,
+};
