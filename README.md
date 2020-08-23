@@ -56,16 +56,16 @@ make
 
 GCC 5 or later is required.
 
-# Experimental: Building for gstreamer (works on generic Linux machines)
+# Building on desktop Linux:
 
-For building on Ubuntu 18.04, follow these steps:
+For building on Ubuntu 18.04 or 20.04, follow these steps:
 ```bash
 sudo apt-get install cmake libavahi-compat-libdnssd-dev libplist-dev libssl-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
     gstreamer1.0-vaapi gstreamer1.0-plugins-bad
 mkdir build
 cd build
-cmake .. -DRENDERER=gstreamer
+cmake ..
 make
 ```
 
@@ -85,6 +85,10 @@ At the moment, these options are implemented:
 **-l**: Enables low-latency mode. Low-latency mode reduces latency by effectively rendering audio and video frames as soon as they are received, ignoring the associated timestamps. As a side effect, playback will be choppy and audio-video sync will be noticably off.
 
 **-a (hdmi|analog|off)**: Set audio output device
+
+**-vr renderer**: Select a video renderer to use (rpi, gstreamer, or dummy)
+
+**-ar renderer**: Select an audio renderer to use (rpi, gstreamer, or dummy)
 
 **-d**: Enables debug logging. Will lead to choppy playback due to heavy console output.
 
