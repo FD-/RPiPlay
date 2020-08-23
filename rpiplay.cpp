@@ -162,11 +162,11 @@ void print_info(char *name) {
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
     printf("-a (hdmi|analog|off)  Set audio output device\n");
-    printf("-vr renderer        Set video renderer to use. Available renderers:\n");
+    printf("-vr renderer          Set video renderer to use. Available renderers:\n");
     for (int i = 0; i < sizeof(video_renderers)/sizeof(video_renderers[0]); i++) {
         printf("    %s: %s%s\n", video_renderers[i].name, video_renderers[i].description, i == 0 ? " [Default]" : "");
     }
-    printf("-ar renderer        Set audio renderer to use. Available renderers:\n");
+    printf("-ar renderer          Set audio renderer to use. Available renderers:\n");
     for (int i = 0; i < sizeof(audio_renderers)/sizeof(audio_renderers[0]); i++) {
         printf("    %s: %s%s\n", audio_renderers[i].name, audio_renderers[i].description, i == 0 ? " [Default]" : "");
     }
