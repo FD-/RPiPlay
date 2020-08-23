@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 //#define DUMP_KEI_IV
 struct mirror_buffer_s {
@@ -52,8 +53,8 @@ mirror_buffer_init_aes(mirror_buffer_t *mirror_buffer, uint64_t streamConnection
     char* siv = "AirPlayStreamIV";
     unsigned char skeyall[255];
     unsigned char sivall[255];
-    sprintf((char*) skeyall, "%s%llu", skey, streamConnectionID);
-    sprintf((char*) sivall, "%s%llu", siv, streamConnectionID);
+    sprintf((char*) skeyall, "%s%" PRIu64, skey, streamConnectionID);
+    sprintf((char*) sivall, "%s%" PRIu64, siv, streamConnectionID);
     sha_reset(ctx);
     sha_update(ctx, skeyall, strlen((char*) skeyall));
     sha_update(ctx, eaeskey, 16);
