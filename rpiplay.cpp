@@ -53,11 +53,13 @@ typedef audio_renderer_t *(*audio_init_func_t)(logger_t *logger, video_renderer_
 
 typedef struct video_renderer_list_entry_s {
     const char *name;
+    const char *description;
     video_init_func_t init_func;
 } video_renderer_list_entry_t;
 
 typedef struct audio_renderer_list_entry_s {
     const char *name;
+    const char *description;
     audio_init_func_t init_func;
 } audio_renderer_list_entry_t;
 
@@ -72,25 +74,25 @@ static logger_t *render_logger = NULL;
 
 static const video_renderer_list_entry_t video_renderers[] = {
 #if defined(HAS_RPI_RENDERER)
-    {"rpi", video_renderer_rpi_init},
+    {"rpi", "Raspberry Pi OpenMAX accelerated H.264 renderer", video_renderer_rpi_init},
 #endif
 #if defined(HAS_GSTREAMER_RENDERER)
-    {"gstreamer", video_renderer_gstreamer_init},
+    {"gstreamer", "GStreamer H.264 renderer", video_renderer_gstreamer_init},
 #endif
 #if defined(HAS_DUMMY_RENDERER)
-    {"dummy", video_renderer_dummy_init},
+    {"dummy", "Dummy renderer; does not actually display video", video_renderer_dummy_init},
 #endif
 };
 
 static const audio_renderer_list_entry_t audio_renderers[] = {
 #if defined(HAS_RPI_RENDERER)
-    {"rpi", audio_renderer_rpi_init},
+    {"rpi", "AAC renderer using fdk-aac for decoding and OpenMAX for rendering", audio_renderer_rpi_init},
 #endif
 #if defined(HAS_GSTREAMER_RENDERER)
-    {"gstreamer", audio_renderer_gstreamer_init},
+    {"gstreamer", "GStreamer audio renderer", audio_renderer_gstreamer_init},
 #endif
 #if defined(HAS_DUMMY_RENDERER)
-    {"dummy", audio_renderer_dummy_init},
+    {"dummy", "Dummy renderer; does not actually play audio", audio_renderer_dummy_init},
 #endif
 };
 
@@ -153,13 +155,21 @@ static audio_init_func_t find_audio_init_func(const char *name) {
 
 void print_info(char *name) {
     printf("RPiPlay %s: An open-source AirPlay mirroring server for Raspberry Pi\n", VERSION);
-    printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)]\n", name);
+    printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)] [-vr renderer] [-ar renderer]\n", name);
     printf("Options:\n");
     printf("-n name               Specify the network name of the AirPlay server\n");
     printf("-b (on|auto|off)      Show black background always, only during active connection, or never\n");
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
     printf("-a (hdmi|analog|off)  Set audio output device\n");
+    printf("-vr renderer        Set video renderer to use. Available renderers:\n");
+    for (int i = 0; i < sizeof(video_renderers)/sizeof(video_renderers[0]); i++) {
+        printf("    %s: %s%s\n", video_renderers[i].name, video_renderers[i].description, i == 0 ? " [Default]" : "");
+    }
+    printf("-ar renderer        Set audio renderer to use. Available renderers:\n");
+    for (int i = 0; i < sizeof(audio_renderers)/sizeof(audio_renderers[0]); i++) {
+        printf("    %s: %s%s\n", audio_renderers[i].name, audio_renderers[i].description, i == 0 ? " [Default]" : "");
+    }
     printf("-d                    Enable debug logging\n");
     printf("-v/-h                 Displays this help and version information\n");
 }
