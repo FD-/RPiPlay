@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
+#include <stdio.h>
 
 typedef struct video_renderer_gstreamer_s {
     video_renderer_t base;
@@ -51,7 +52,7 @@ static gboolean check_plugins(void)
     return ret;
 }
 
-video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip) {
     video_renderer_gstreamer_t *renderer;
     GError *error = NULL;
 
@@ -66,9 +67,58 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mod
 
     assert(check_plugins());
 
-    renderer->pipeline = gst_parse_launch("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
-    "queue ! decodebin ! videoconvert ! autovideosink name=video_sink sync=false", &error);
+    // Begin the video pipeline
+    GString *launch = g_string_new("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
+                                   "queue ! decodebin ! videoconvert ! ");
+    // Setup rotation
+    if (rotation != 0) {
+        switch (rotation)
+        {
+        case 90:
+        case -270:
+            g_string_append(launch, "videoflip method=clockwise ! ");
+            break;
+        case -90:
+        case 270:
+            g_string_append(launch, "videoflip method=counterclockwise ! ");
+            break;
+        case 180:
+        case -180:
+            g_string_append(launch, "videoflip method=rotate-180 ! ");
+            break;
+        default:
+            printf("Error: Rotation must be +/- 0,90,180,270\n");
+            g_string_free(launch, TRUE);
+            free(renderer);
+            return NULL;
+        }
+    }
+
+    // Setup flip
+    if (flip != FLIP_NONE) {
+        switch (flip)
+        {
+        case FLIP_HORIZONTAL:
+            g_string_append(launch, "videoflip method=horizontal-flip ! ");
+            break;
+        case FLIP_VERTICAL:
+            g_string_append(launch, "videoflip method=vertical-flip ! ");
+            break;
+        case FLIP_BOTH:
+            g_string_append(launch, "videoflip method=rotate-180 ! ");
+            break;
+        case FLIP_NONE:
+        default:
+            break;
+        }
+    }
+
+    // Finish the pipeline
+    g_string_append(launch, "autovideosink name=video_sink sync=false");
+
+    renderer->pipeline = gst_parse_launch(launch->str, &error);
     g_assert(renderer->pipeline);
+    g_string_free(launch, TRUE);
 
     renderer->appsrc = gst_bin_get_by_name(GST_BIN(renderer->pipeline), "video_source");
     renderer->sink = gst_bin_get_by_name(GST_BIN(renderer->pipeline), "video_sink");

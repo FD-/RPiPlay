@@ -32,7 +32,7 @@ typedef struct video_renderer_dummy_s {
 
 static const video_renderer_funcs_t video_renderer_dummy_funcs;
 
-video_renderer_t *video_renderer_dummy_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+video_renderer_t *video_renderer_dummy_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip) {
     video_renderer_dummy_t *renderer;
     renderer = calloc(1, sizeof(video_renderer_dummy_t));
     if (!renderer) {

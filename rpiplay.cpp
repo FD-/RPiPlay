@@ -41,14 +41,16 @@
 #define DEFAULT_LOW_LATENCY false
 #define DEFAULT_DEBUG_LOG false
 #define DEFAULT_ROTATE 0
+#define DEFAULT_FLIP FLIP_NONE
 #define DEFAULT_HW_ADDRESS { (char) 0x48, (char) 0x5d, (char) 0x60, (char) 0x7c, (char) 0xee, (char) 0x22 }
 
 int start_server(std::vector<char> hw_addr, std::string name, background_mode_t background_mode,
-                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation);
+                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation,
+                 flip_mode_t flip);
 
 int stop_server();
 
-typedef video_renderer_t *(*video_init_func_t)(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation);
+typedef video_renderer_t *(*video_init_func_t)(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip);
 typedef audio_renderer_t *(*audio_init_func_t)(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
 
 typedef struct video_renderer_list_entry_s {
@@ -160,6 +162,7 @@ void print_info(char *name) {
     printf("-n name               Specify the network name of the AirPlay server\n");
     printf("-b (on|auto|off)      Show black background always, only during active connection, or never\n");
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
+    printf("-f (horiz|vert|both)  Specify image flipping (horiz = horizontal, vert = vertical, both = both)\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
     printf("-a (hdmi|analog|off)  Set audio output device\n");
     printf("-vr renderer          Set video renderer to use. Available renderers:\n");
@@ -183,6 +186,7 @@ int main(int argc, char *argv[]) {
     audio_device_t audio_device = DEFAULT_AUDIO_DEVICE;
     bool low_latency = DEFAULT_LOW_LATENCY;
     int rotation = DEFAULT_ROTATE;
+    flip_mode_t flip = DEFAULT_FLIP;
     bool debug_log = DEFAULT_DEBUG_LOG;
     // Default to the best available renderer
     video_init_func = video_renderers[0].init_func;
@@ -215,6 +219,13 @@ int main(int argc, char *argv[]) {
             low_latency = !low_latency;
         } else if (arg == "-r") {
             rotation = atoi(argv[++i]);
+        } else if (arg == "-f") {
+            if (i == argc - 1) continue;
+            std::string flip_type(argv[++i]);
+            flip = flip_type == "horiz" ? FLIP_HORIZONTAL :
+                   flip_type == "vert" ? FLIP_VERTICAL :
+                   flip_type == "both" ? FLIP_BOTH :
+                   FLIP_NONE;
         } else if (arg == "-d") {
             debug_log = !debug_log;
         } else if (arg == "-vr") {
@@ -249,7 +260,7 @@ int main(int argc, char *argv[]) {
         parse_hw_addr(mac_address, server_hw_addr);
     }
 
-    if (start_server(server_hw_addr, server_name, background, audio_device, low_latency, debug_log, rotation) != 0) {
+    if (start_server(server_hw_addr, server_name, background, audio_device, low_latency, debug_log, rotation, flip) != 0) {
         return 1;
     }
 
@@ -322,7 +333,8 @@ extern "C" void log_callback(void *cls, int level, const char *msg) {
 }
 
 int start_server(std::vector<char> hw_addr, std::string name, background_mode_t background_mode,
-                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation) {
+                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation,
+                 flip_mode_t flip) {
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
     raop_cbs.conn_init = conn_init;
@@ -348,7 +360,7 @@ int start_server(std::vector<char> hw_addr, std::string name, background_mode_t 
 
     if (low_latency) logger_log(render_logger, LOGGER_INFO, "Using low-latency mode");
 
-    if ((video_renderer = video_init_func(render_logger, background_mode, low_latency, rotation)) == NULL) {
+    if ((video_renderer = video_init_func(render_logger, background_mode, low_latency, rotation, flip)) == NULL) {
         LOGE("Could not init video renderer");
         return -1;
     }

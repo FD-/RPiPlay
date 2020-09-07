@@ -154,7 +154,7 @@ static void omx_event_handler(void *userdata, COMPONENT_T *comp, OMX_U32 data) {
     logger_log(renderer->base.logger, LOGGER_DEBUG, "Video renderer config change: %p: %d", comp, data);
 }
 
-static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int rotation) {
+static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int rotation, flip_mode_t flip) {
     memset(renderer->components, 0, sizeof(renderer->components));
     memset(renderer->tunnels, 0, sizeof(renderer->tunnels));
 
@@ -294,6 +294,36 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int r
 	    }
     }
 
+    // Setup flipping
+    if (flip != FLIP_NONE) {
+        OMX_CONFIG_MIRRORTYPE omx_mirror;
+        memset(&omx_mirror, 0, sizeof(OMX_CONFIG_MIRRORTYPE));
+        omx_mirror.nSize = sizeof(OMX_CONFIG_MIRRORTYPE);
+        switch (flip) {
+        case FLIP_HORIZONTAL:
+            omx_mirror.eMirror = OMX_MirrorHorizontal;
+            break;
+        case FLIP_VERTICAL:
+            omx_mirror.eMirror = OMX_MirrorVertical;
+            break;
+        case FLIP_BOTH:
+            omx_mirror.eMirror = OMX_MirrorBoth;
+            break;
+        default:
+            omx_mirror.eMirror = OMX_MirrorNone;
+            break;
+        }
+        omx_mirror.nPortIndex = 90;
+        omx_mirror.nVersion.nVersion = OMX_VERSION;
+        OMX_ERRORTYPE error = OMX_SetConfig(ilclient_get_handle(renderer->video_renderer), OMX_IndexConfigCommonMirror,
+                                            &omx_mirror);
+        if (error != OMX_ErrorNone) {
+            printf("Error: %x\n", error);
+            video_renderer_rpi_destroy_decoder(renderer);
+            return -15;
+        }
+    }
+
     // Set decoder format
     ilclient_change_component_state(renderer->video_decoder, OMX_StateIdle);
     OMX_VIDEO_PARAM_PORTFORMATTYPE format;
@@ -315,7 +345,7 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int r
     return 1;
 }
 
-video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation) {
+video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip) {
     video_renderer_rpi_t *renderer;
     renderer = calloc(1, sizeof(video_renderer_rpi_t));
     if (!renderer) {
@@ -331,7 +361,7 @@ video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t ba
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
 
-    if (video_renderer_rpi_init_decoder(renderer, rotation) != 1) {
+    if (video_renderer_rpi_init_decoder(renderer, rotation, flip) != 1) {
         free(renderer);
         renderer = NULL;
     }
