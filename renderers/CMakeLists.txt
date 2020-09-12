@@ -17,20 +17,20 @@ set( RENDERER_LINK_LIBS "" )
 set( RENDERER_INCLUDE_DIRS "" )
 
 # Check for availability of OpenMAX libraries on Raspberry Pi
-find_library( BRCM_GLES_V2 brcmGLESv2 HINTS /opt/vc/lib/ )
-find_library( BRCM_EGL brcmEGL HINTS /opt/vc/lib/ )
-find_library( OPENMAXIL openmaxil HINTS /opt/vc/lib/ )
-find_library( BCM_HOST bcm_host HINTS /opt/vc/lib/ )
-find_library( VCOS vcos HINTS /opt/vc/lib/ )
-find_library( VCHIQ_ARM vchiq_arm HINTS /opt/vc/lib/ )
+find_library( BRCM_GLES_V2 brcmGLESv2 HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
+find_library( BRCM_EGL brcmEGL HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
+find_library( OPENMAXIL openmaxil HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
+find_library( BCM_HOST bcm_host HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
+find_library( VCOS vcos HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
+find_library( VCHIQ_ARM vchiq_arm HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
 
 if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM )
   # We have OpenMAX libraries available! Use them!
   message( STATUS "Found OpenMAX libraries for Raspberry Pi" )
-  include_directories( /opt/vc/include/ 
-  	/opt/vc/include/interface/vcos/pthreads 
-  	/opt/vc/include/interface/vmcs_host/linux 
-  	/opt/vc/src/hello_pi/libs/ilclient )
+  include_directories( ${CMAKE_SYSROOT}/opt/vc/include/ 
+  	${CMAKE_SYSROOT}/opt/vc/include/interface/vcos/pthreads 
+  	${CMAKE_SYSROOT}/opt/vc/include/interface/vmcs_host/linux 
+  	${CMAKE_SYSROOT}/opt/vc/src/hello_pi/libs/ilclient )
 
   add_subdirectory( fdk-aac )
   add_subdirectory( h264-bitstream )
@@ -47,7 +47,7 @@ if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM 
 
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX   -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM -Wno-psabi" )
   
-  aux_source_directory( /opt/vc/src/hello_pi/libs/ilclient/ ilclient_src )
+  aux_source_directory( ${CMAKE_SYSROOT}/opt/vc/src/hello_pi/libs/ilclient/ ilclient_src )
   set( DIR_SRCS ${ilclient_src} )
   add_library( ilclient STATIC ${DIR_SRCS} )
 
