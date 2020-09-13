@@ -43,8 +43,7 @@
 
 typedef struct video_renderer_rpi_s {
     video_renderer_t base;
-    bool low_latency;
-    background_mode_t background_mode;
+    video_renderer_config_t const *config;
 
     uint16_t background_visits;
     DISPMANX_ELEMENT_HANDLE_T background_element;
@@ -122,9 +121,9 @@ static void video_renderer_rpi_update_background(video_renderer_t *renderer, int
         r->background_visits = 0;
     }
 
-    if (r->background_mode == BACKGROUND_MODE_ON) {
+    if (r->config->background_mode == BACKGROUND_MODE_ON) {
         video_renderer_rpi_render_background(r);
-    } else if (r->background_mode == BACKGROUND_MODE_AUTO) {
+    } else if (r->config->background_mode == BACKGROUND_MODE_AUTO) {
         // Show background when connection is made and hide background when all connections are gone
         if (r->background_visits > 0) {
             video_renderer_rpi_render_background(r);
@@ -154,7 +153,7 @@ static void omx_event_handler(void *userdata, COMPONENT_T *comp, OMX_U32 data) {
     logger_log(renderer->base.logger, LOGGER_DEBUG, "Video renderer config change: %p: %d", comp, data);
 }
 
-static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int rotation, flip_mode_t flip) {
+static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
     memset(renderer->components, 0, sizeof(renderer->components));
     memset(renderer->tunnels, 0, sizeof(renderer->tunnels));
 
@@ -272,34 +271,35 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int r
     }
 
     // Setup rotation
-    if (rotation != 0) {
-	    OMX_CONFIG_ROTATIONTYPE omx_rotation;
-	    memset(&omx_rotation, 0, sizeof(OMX_CONFIG_ROTATIONTYPE));
-	    omx_rotation.nSize = sizeof(OMX_CONFIG_ROTATIONTYPE);
-	    // Check the rotation here
-	    if (rotation != 90 && rotation != -90 && rotation != 180 && rotation != -180 && rotation != 270 && rotation != -270) {
-		printf("Error: Rotation must be +/- 0,90,180,270\n");
-		video_renderer_rpi_destroy_decoder(renderer);
-		return -15;
-	    }
-	    omx_rotation.nRotation = rotation;
-	    omx_rotation.nPortIndex = 90;
-	    omx_rotation.nVersion.nVersion = OMX_VERSION;
-	    OMX_ERRORTYPE error = OMX_SetConfig(ilclient_get_handle(renderer->video_renderer), OMX_IndexConfigCommonRotate,
-				 &omx_rotation);
-	    if (error != OMX_ErrorNone) {
-		printf("Error: %x\n", error);
-		video_renderer_rpi_destroy_decoder(renderer);
-		return -15;
-	    }
+    if (renderer->config->rotation != 0) {
+        int rotation = renderer->config->rotation;
+        OMX_CONFIG_ROTATIONTYPE omx_rotation;
+        memset(&omx_rotation, 0, sizeof(OMX_CONFIG_ROTATIONTYPE));
+        omx_rotation.nSize = sizeof(OMX_CONFIG_ROTATIONTYPE);
+        // Check the rotation here
+        if (rotation != 90 && rotation != -90 && rotation != 180 && rotation != -180 && rotation != 270 && rotation != -270) {
+            printf("Error: Rotation must be +/- 0,90,180,270\n");
+            video_renderer_rpi_destroy_decoder(renderer);
+            return -15;
+        }
+        omx_rotation.nRotation = rotation;
+        omx_rotation.nPortIndex = 90;
+        omx_rotation.nVersion.nVersion = OMX_VERSION;
+        OMX_ERRORTYPE error = OMX_SetConfig(ilclient_get_handle(renderer->video_renderer), OMX_IndexConfigCommonRotate,
+                                            &omx_rotation);
+        if (error != OMX_ErrorNone) {
+            printf("Error: %x\n", error);
+            video_renderer_rpi_destroy_decoder(renderer);
+            return -15;
+        }
     }
 
     // Setup flipping
-    if (flip != FLIP_NONE) {
+    if (renderer->config->flip != FLIP_NONE) {
         OMX_CONFIG_MIRRORTYPE omx_mirror;
         memset(&omx_mirror, 0, sizeof(OMX_CONFIG_MIRRORTYPE));
         omx_mirror.nSize = sizeof(OMX_CONFIG_MIRRORTYPE);
-        switch (flip) {
+        switch (renderer->config->flip) {
         case FLIP_HORIZONTAL:
             omx_mirror.eMirror = OMX_MirrorHorizontal;
             break;
@@ -345,7 +345,7 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer, int r
     return 1;
 }
 
-video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip) {
+video_renderer_t *video_renderer_rpi_init(logger_t *logger, video_renderer_config_t const *config) {
     video_renderer_rpi_t *renderer;
     renderer = calloc(1, sizeof(video_renderer_rpi_t));
     if (!renderer) {
@@ -355,13 +355,12 @@ video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t ba
     renderer->base.logger = logger;
     renderer->base.funcs = &video_renderer_rpi_funcs;
     renderer->base.type = VIDEO_RENDERER_RPI;
-    renderer->low_latency = low_latency;
-    renderer->background_mode = background_mode;
+    renderer->config = config;
 
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
 
-    if (video_renderer_rpi_init_decoder(renderer, rotation, flip) != 1) {
+    if (video_renderer_rpi_init_decoder(renderer) != 1) {
         free(renderer);
         renderer = NULL;
     }
@@ -470,11 +469,11 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
         buffer->nFilledLen = chunk_size;
         buffer->nOffset = 0;
 
-        if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
+        if (!r->config->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
         if (r->first_packet_time == 0) {
             buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
             r->first_packet_time = raop_ntp_get_local_time(ntp);
-            if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
+            if (!r->config->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
         }
 
         // Mark the last buffer if we had to split the data (probably not necessary)

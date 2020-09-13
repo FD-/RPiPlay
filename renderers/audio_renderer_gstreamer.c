@@ -53,7 +53,7 @@ static gboolean check_plugins(void)
     return ret;
 }
 
-audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config) {
     audio_renderer_gstreamer_t *renderer;
     GError *error = NULL;
 

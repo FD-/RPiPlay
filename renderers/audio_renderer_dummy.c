@@ -32,7 +32,7 @@ typedef struct audio_renderer_dummy_s {
 
 static const audio_renderer_funcs_t audio_renderer_dummy_funcs;
 
-audio_renderer_t *audio_renderer_dummy_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+audio_renderer_t *audio_renderer_dummy_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config) {
     audio_renderer_dummy_t *renderer;
     renderer = calloc(1, sizeof(audio_renderer_dummy_t));
     if (!renderer) {

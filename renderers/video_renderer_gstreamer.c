@@ -52,7 +52,7 @@ static gboolean check_plugins(void)
     return ret;
 }
 
-video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip) {
+video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer_config_t const *config) {
     video_renderer_gstreamer_t *renderer;
     GError *error = NULL;
 
@@ -71,9 +71,8 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mod
     GString *launch = g_string_new("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
                                    "queue ! decodebin ! videoconvert ! ");
     // Setup rotation
-    if (rotation != 0) {
-        switch (rotation)
-        {
+    if (config->rotation != 0) {
+        switch (config->rotation) {
         case 90:
         case -270:
             g_string_append(launch, "videoflip method=clockwise ! ");
@@ -95,9 +94,8 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mod
     }
 
     // Setup flip
-    if (flip != FLIP_NONE) {
-        switch (flip)
-        {
+    if (config->flip != FLIP_NONE) {
+        switch (config->flip) {
         case FLIP_HORIZONTAL:
             g_string_append(launch, "videoflip method=horizontal-flip ! ");
             break;

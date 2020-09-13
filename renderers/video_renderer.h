@@ -54,6 +54,13 @@ typedef enum flip_mode_e {
     FLIP_BOTH
 } flip_mode_t;
 
+typedef struct video_renderer_config_s {
+    background_mode_t background_mode;
+    bool low_latency;
+    int rotation;
+    flip_mode_t flip;
+} video_renderer_config_t;
+
 typedef struct video_renderer_s video_renderer_t;
 
 typedef struct video_renderer_funcs_s {
@@ -78,9 +85,9 @@ typedef struct video_renderer_s {
     video_renderer_type_t type;
 } video_renderer_t;
 
-video_renderer_t *video_renderer_dummy_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip);
-video_renderer_t *video_renderer_rpi_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip);
-video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip);
+video_renderer_t *video_renderer_dummy_init(logger_t *logger, video_renderer_config_t const *config);
+video_renderer_t *video_renderer_rpi_init(logger_t *logger, video_renderer_config_t const *config);
+video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer_config_t const *config);
 
 #ifdef __cplusplus
 }

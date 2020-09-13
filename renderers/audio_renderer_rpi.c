@@ -44,7 +44,7 @@ extern COMPONENT_T *video_renderer_rpi_get_clock(video_renderer_t *renderer);
 typedef struct audio_renderer_rpi_s {
     audio_renderer_t base;
     video_renderer_t *video_renderer;
-    bool low_latency;
+    audio_renderer_config_t const *config;
 
     HANDLE_AACDECODER audio_decoder;
 
@@ -109,7 +109,7 @@ static void audio_renderer_rpi_destroy_renderer(audio_renderer_rpi_t *renderer) 
     }
 }
 
-static int audio_renderer_rpi_init_renderer(audio_renderer_rpi_t *renderer, video_renderer_t *video_renderer, audio_device_t device) {
+static int audio_renderer_rpi_init_renderer(audio_renderer_rpi_t *renderer, video_renderer_t *video_renderer) {
     memset(renderer->components, 0, sizeof(renderer->components));
 
     if (video_renderer) {
@@ -217,7 +217,7 @@ static int audio_renderer_rpi_init_renderer(audio_renderer_rpi_t *renderer, vide
     }
 
     // Set audio device
-    const char *device_name = device == AUDIO_DEVICE_HDMI ? "hdmi" : "local";
+    const char *device_name = renderer->config->device == AUDIO_DEVICE_HDMI ? "hdmi" : "local";
     OMX_CONFIG_BRCMAUDIODESTINATIONTYPE audio_destination;
     memset(&audio_destination, 0, sizeof(OMX_CONFIG_BRCMAUDIODESTINATIONTYPE));
     audio_destination.nSize = sizeof(OMX_CONFIG_BRCMAUDIODESTINATIONTYPE);
@@ -236,7 +236,7 @@ static int audio_renderer_rpi_init_renderer(audio_renderer_rpi_t *renderer, vide
     return 1;
 }
 
-audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency) {
+audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config) {
     audio_renderer_rpi_t *renderer;
     renderer = calloc(1, sizeof(audio_renderer_rpi_t));
     if (!renderer) {
@@ -251,7 +251,7 @@ audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *vi
         video_renderer = NULL;
     }
     renderer->video_renderer = video_renderer;
-    renderer->low_latency = low_latency;
+    renderer->config = config;
 
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
@@ -261,7 +261,7 @@ audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *vi
         renderer = NULL;
     }
 
-    if (audio_renderer_rpi_init_renderer(renderer, video_renderer, device) != 1) {
+    if (audio_renderer_rpi_init_renderer(renderer, video_renderer) != 1) {
         audio_renderer_rpi_destroy_decoder(renderer);
         free(renderer);
         renderer = NULL;
@@ -339,11 +339,11 @@ static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_nt
         buffer->nFilledLen = chunk_size;
         buffer->nOffset = 0;
 
-        if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
+        if (!r->config->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(pts);
         if (r->first_packet_time == 0) {
             buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
             r->first_packet_time = raop_ntp_get_local_time(ntp);
-            if (!r->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
+            if (!r->config->low_latency) buffer->nTimeStamp = ilclient_ticks_from_s64(r->first_packet_time);
         }
 
         if (OMX_EmptyThisBuffer(ILC_GET_HANDLE(r->audio_renderer), buffer) != OMX_ErrorNone) {

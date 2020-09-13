@@ -44,14 +44,13 @@
 #define DEFAULT_FLIP FLIP_NONE
 #define DEFAULT_HW_ADDRESS { (char) 0x48, (char) 0x5d, (char) 0x60, (char) 0x7c, (char) 0xee, (char) 0x22 }
 
-int start_server(std::vector<char> hw_addr, std::string name, background_mode_t background_mode,
-                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation,
-                 flip_mode_t flip);
+int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
+                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config);
 
 int stop_server();
 
-typedef video_renderer_t *(*video_init_func_t)(logger_t *logger, background_mode_t background_mode, bool low_latency, int rotation, flip_mode_t flip);
-typedef audio_renderer_t *(*audio_init_func_t)(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
+typedef video_renderer_t *(*video_init_func_t)(logger_t *logger, video_renderer_config_t const *config);
+typedef audio_renderer_t *(*audio_init_func_t)(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config);
 
 typedef struct video_renderer_list_entry_s {
     const char *name;
@@ -179,15 +178,21 @@ void print_info(char *name) {
 
 int main(int argc, char *argv[]) {
     init_signals();
-
-    background_mode_t background = DEFAULT_BACKGROUND_MODE;
+    
     std::string server_name = DEFAULT_NAME;
     std::vector<char> server_hw_addr = DEFAULT_HW_ADDRESS;
-    audio_device_t audio_device = DEFAULT_AUDIO_DEVICE;
-    bool low_latency = DEFAULT_LOW_LATENCY;
-    int rotation = DEFAULT_ROTATE;
-    flip_mode_t flip = DEFAULT_FLIP;
     bool debug_log = DEFAULT_DEBUG_LOG;
+
+    video_renderer_config_t video_config;
+    video_config.background_mode = DEFAULT_BACKGROUND_MODE;
+    video_config.low_latency = DEFAULT_LOW_LATENCY;
+    video_config.rotation = DEFAULT_ROTATE;
+    video_config.flip = DEFAULT_FLIP;
+    
+    audio_renderer_config_t audio_config;
+    audio_config.device = DEFAULT_AUDIO_DEVICE;
+    audio_config.low_latency = DEFAULT_LOW_LATENCY;
+    
     // Default to the best available renderer
     video_init_func = video_renderers[0].init_func;
     audio_init_func = audio_renderers[0].init_func;
@@ -201,31 +206,32 @@ int main(int argc, char *argv[]) {
         } else if (arg == "-b") {
             // For backwards-compatibility, make just -b disable the background
             if (i == argc - 1 || argv[i + 1][0] == '-') {
-                background = BACKGROUND_MODE_OFF;
+                video_config.background_mode = BACKGROUND_MODE_OFF;
                 continue;
             }
 
             std::string background_mode(argv[++i]);
-            background = background_mode == "off" ? BACKGROUND_MODE_OFF :
-                         background_mode == "auto" ? BACKGROUND_MODE_AUTO :
-                         BACKGROUND_MODE_ON;
+            video_config.background_mode = background_mode == "off" ? BACKGROUND_MODE_OFF :
+                                           background_mode == "auto" ? BACKGROUND_MODE_AUTO :
+                                           BACKGROUND_MODE_ON;
         } else if (arg == "-a") {
             if (i == argc - 1) continue;
             std::string audio_device_name(argv[++i]);
-            audio_device = audio_device_name == "hdmi" ? AUDIO_DEVICE_HDMI :
-                           audio_device_name == "analog" ? AUDIO_DEVICE_ANALOG :
-                           AUDIO_DEVICE_NONE;
+            audio_config.device = audio_device_name == "hdmi" ? AUDIO_DEVICE_HDMI :
+                                  audio_device_name == "analog" ? AUDIO_DEVICE_ANALOG :
+                                  AUDIO_DEVICE_NONE;
         } else if (arg == "-l") {
-            low_latency = !low_latency;
+            video_config.low_latency = !video_config.low_latency;
+            audio_config.low_latency = !audio_config.low_latency;
         } else if (arg == "-r") {
-            rotation = atoi(argv[++i]);
+            video_config.rotation = atoi(argv[++i]);
         } else if (arg == "-f") {
             if (i == argc - 1) continue;
             std::string flip_type(argv[++i]);
-            flip = flip_type == "horiz" ? FLIP_HORIZONTAL :
-                   flip_type == "vert" ? FLIP_VERTICAL :
-                   flip_type == "both" ? FLIP_BOTH :
-                   FLIP_NONE;
+            video_config.flip = flip_type == "horiz" ? FLIP_HORIZONTAL :
+                                flip_type == "vert" ? FLIP_VERTICAL :
+                                flip_type == "both" ? FLIP_BOTH :
+                                FLIP_NONE;
         } else if (arg == "-d") {
             debug_log = !debug_log;
         } else if (arg == "-vr") {
@@ -260,7 +266,7 @@ int main(int argc, char *argv[]) {
         parse_hw_addr(mac_address, server_hw_addr);
     }
 
-    if (start_server(server_hw_addr, server_name, background, audio_device, low_latency, debug_log, rotation, flip) != 0) {
+    if (start_server(server_hw_addr, server_name, debug_log, &video_config, &audio_config) != 0) {
         return 1;
     }
 
@@ -332,9 +338,8 @@ extern "C" void log_callback(void *cls, int level, const char *msg) {
 
 }
 
-int start_server(std::vector<char> hw_addr, std::string name, background_mode_t background_mode,
-                 audio_device_t audio_device, bool low_latency, bool debug_log, int rotation,
-                 flip_mode_t flip) {
+int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
+                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config) {
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
     raop_cbs.conn_init = conn_init;
@@ -358,16 +363,16 @@ int start_server(std::vector<char> hw_addr, std::string name, background_mode_t 
     logger_set_callback(render_logger, log_callback, NULL);
     logger_set_level(render_logger, debug_log ? LOGGER_DEBUG : LOGGER_INFO);
 
-    if (low_latency) logger_log(render_logger, LOGGER_INFO, "Using low-latency mode");
+    if (video_config->low_latency) logger_log(render_logger, LOGGER_INFO, "Using low-latency mode");
 
-    if ((video_renderer = video_init_func(render_logger, background_mode, low_latency, rotation, flip)) == NULL) {
+    if ((video_renderer = video_init_func(render_logger, video_config)) == NULL) {
         LOGE("Could not init video renderer");
         return -1;
     }
 
-    if (audio_device == AUDIO_DEVICE_NONE) {
+    if (audio_config->device == AUDIO_DEVICE_NONE) {
         LOGI("Audio disabled");
-    } else if ((audio_renderer = audio_init_func(render_logger, video_renderer, audio_device, low_latency)) ==
+    } else if ((audio_renderer = audio_init_func(render_logger, video_renderer, audio_config)) ==
                NULL) {
         LOGE("Could not init audio renderer");
         return -1;

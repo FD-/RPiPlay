@@ -38,6 +38,11 @@ typedef enum audio_renderer_type_e {
     AUDIO_RENDERER_GSTREAMER
 } audio_renderer_type_t;
 
+typedef struct audio_renderer_config_s {
+    audio_device_t device;
+    bool low_latency;
+} audio_renderer_config_t;
+
 typedef struct audio_renderer_s audio_renderer_t;
 
 typedef struct audio_renderer_funcs_s {
@@ -54,9 +59,9 @@ typedef struct audio_renderer_s {
     audio_renderer_type_t type;
 } audio_renderer_t;
 
-audio_renderer_t *audio_renderer_dummy_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
-audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
-audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer_t *video_renderer, audio_device_t device, bool low_latency);
+audio_renderer_t *audio_renderer_dummy_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config);
+audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config);
+audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer_t *video_renderer, audio_renderer_config_t const *config);
 
 #ifdef __cplusplus
 }
