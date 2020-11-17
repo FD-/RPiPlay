@@ -71,6 +71,11 @@ make
 
 Note: The -b, -r, -l, and -a options are not supported with the gstreamer renderer.
 
+# Building in docker for LibreElec for Rasberry Pi
+
+Since it is not possible to install the build tools in LibreElec, the build can be make by launching the `build_with_docker.sh` script in the `docker-builder` folder.
+The LibreElec docker extension should be installed prior to starting the build.
+
 # Usage
 
 Start the rpiplay executable and an AirPlay mirror target device will appear in the network.
