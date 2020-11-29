@@ -36,7 +36,7 @@ raop_handler_info(raop_conn_t *conn,
     printf("Display width reported as: %d\n", info_display_width);
    	printf("Display height reported as: %d\n", info_display_height);
 
-    int airplay_txt_len= 0;
+    int airplay_txt_len = 0;
     const char *airplay_txt = dnssd_get_airplay_txt(conn->raop->dnssd, &airplay_txt_len);
 
     int name_len = 0;
