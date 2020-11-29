@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <plist/plist.h>
 
-#define FRAMERATE 15.0 //Framerate
+#define FRAMERATE 60.0 //Framerate
 
 typedef void (*raop_handler_t)(raop_conn_t *, http_request_t *,
                                http_response_t *, char **, int *);
