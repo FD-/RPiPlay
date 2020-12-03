@@ -241,6 +241,8 @@ int main(int argc, char *argv[]) {
                                 FLIP_NONE;
         } else if (arg == "-d") {
             debug_log = !debug_log;
+        } else if (arg == "-z") {
+            framerate = atoi(argv[++i]);
         } else if (arg == "-vr") {
             if (i == argc - 1) {
                 fprintf(stderr, "Error: You must supply the name of a video renderer after the -vr argument.\n");
