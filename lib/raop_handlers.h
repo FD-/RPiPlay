@@ -26,6 +26,7 @@ float framerate = 60.0;
 typedef void (*raop_handler_t)(raop_conn_t *, http_request_t *,
                                http_response_t *, char **, int *);
 
+/*
 static void
 raop_handler_info(raop_conn_t *conn,
                   http_request_t *request, http_response_t *response,
@@ -168,6 +169,8 @@ raop_handler_info(raop_conn_t *conn,
     free(pk);
     free(hw_addr);
 }
+
+*/
 
 static void
 raop_handler_pairsetup(raop_conn_t *conn,
