@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <plist/plist.h>
 
-float framerate = 60.0;
+//float framerate = 60.0;
 
 typedef void (*raop_handler_t)(raop_conn_t *, http_request_t *,
                                http_response_t *, char **, int *);

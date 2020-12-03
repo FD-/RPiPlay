@@ -46,6 +46,8 @@
 #define DEFAULT_FLIP FLIP_NONE
 #define DEFAULT_HW_ADDRESS { (char) 0x48, (char) 0x5d, (char) 0x60, (char) 0x7c, (char) 0xee, (char) 0x22 }
 
+float framerate = 60.0;
+
 static void
 raop_handler_info(raop_conn_t *conn,
                   http_request_t *request, http_response_t *response,
