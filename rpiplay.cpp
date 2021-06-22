@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <cstdlib>
 
 #include "log.h"
 #include "lib/raop.h"
@@ -44,8 +45,12 @@
 #define DEFAULT_FLIP FLIP_NONE
 #define DEFAULT_HW_ADDRESS { (char) 0x48, (char) 0x5d, (char) 0x60, (char) 0x7c, (char) 0xee, (char) 0x22 }
 
+#define HIGHEST_PORT  65535
+#define LOWEST_ALLOWED_PORT 1024
+
 int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
-                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config);
+                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config,
+                 unsigned short tcp[2], unsigned short udp[3]);
 
 int stop_server();
 
@@ -156,7 +161,7 @@ static audio_init_func_t find_audio_init_func(const char *name) {
 
 void print_info(char *name) {
     printf("RPiPlay %s: An open-source AirPlay mirroring server for Raspberry Pi\n", VERSION);
-    printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)] [-vr renderer] [-ar renderer]\n", name);
+    printf("Usage: %s [-n name] [-b (on|auto|off)] [-r (90|180|270)] [-l] [-a (hdmi|analog|off)] [-vr renderer] [-ar renderer] [-p[n]]\n", name);
     printf("Options:\n");
     printf("-n name               Specify the network name of the AirPlay server\n");
     printf("-b (on|auto|off)      Show black background always, only during active connection, or never\n");
@@ -172,6 +177,11 @@ void print_info(char *name) {
     for (int i = 0; i < sizeof(audio_renderers)/sizeof(audio_renderers[0]); i++) {
         printf("    %s: %s%s\n", audio_renderers[i].name, audio_renderers[i].description, i == 0 ? " [Default]" : "");
     }
+    printf("-p[n]                 Without optional [n]): use network ports\n");
+    printf("                             TCP: 7000,7001,7100; UDP: 7011,6000,6001\n");
+    printf("                      With [n], n >1023  (e.g. -p34567 for n = 34567)\n");
+    printf("                             TCP and UDP:  n, n+1, n+2\n");
+    printf("                      n = 0: show ports used and stop (use -p[n] -p0)\n");
     printf("-d                    Enable debug logging\n");
     printf("-v/-h                 Displays this help and version information\n");
 }
@@ -196,6 +206,9 @@ int main(int argc, char *argv[]) {
     // Default to the best available renderer
     video_init_func = video_renderers[0].init_func;
     audio_init_func = audio_renderers[0].init_func;
+
+    // requested network ports initialized to zero (for random port selection)
+    unsigned short udp[3] = {0}, tcp[2] = {0};
 
     // Parse arguments
     for (int i = 1; i < argc; i++) {
@@ -254,6 +267,37 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "Error: Unable to locate audio renderer \"%s\".\n", argv[i]);
                 exit(1);
             }
+        } else if (arg.substr(0,2) == "-p") {
+            const char *str = const_cast<char*>((arg.substr(2,6)).c_str());
+            if (!strlen(str)) {
+
+           /* legacy hard coded network port settings  (TCP and UDP)  */
+
+            tcp[0] = 7100;   /* local rtp mirror port: can be changed, except that TCP 7100 is required for mirroring IOS6 (or older) clients */
+            tcp[1] = 7000;   /* Airplay/RAOP server port: can be changed */
+	    /* rpiplay also registers TCP port (tcp[1] + 1) with the Bonjour server, but does not appear to use it  */  
+
+            udp[0] = 7011;   /* local ntp timing port, value taken from legay sources: can be changed */
+            udp[1] = 6001;   /* local rtp control port, value taken from legacy sources: can be changed */
+            udp[2] = 6000;   /* local rtp data port, value taken from legacy sources: can be changed */
+            } else {
+                char *end;
+                long l = strtol(str,&end,10);
+                if (l == 0) {
+                    printf(" TCP network ports requested  %d %d (TCP %d may also be needed) \n", tcp[0], tcp[1], tcp[1] + (tcp[1] ? 1 : 0));                            ;
+                    printf(" UDP network ports requested  %d %d %d \n", udp[0], udp[1], udp[2]);
+                    printf(" a port value of 0 means a random choice will be made. \n");	   
+                    exit(0);
+                } else if (*end || (l < LOWEST_ALLOWED_PORT && l) || l > HIGHEST_PORT - 2) {
+                    fprintf(stderr, "Error: \"%s\" sets invalid port range, (%d-%d is allowed).\n",argv[i],LOWEST_ALLOWED_PORT,HIGHEST_PORT);
+                    exit(1);
+                }
+            for (int i =  0; i < 3; i++) {
+                udp[i] = (unsigned short) l;
+                if (i < 2) tcp[i] = (unsigned short) l;
+                if(l) l++;
+                }
+            }           
         } else if (arg == "-h" || arg == "-v") {
             print_info(argv[0]);
             exit(0);
@@ -266,7 +310,7 @@ int main(int argc, char *argv[]) {
         parse_hw_addr(mac_address, server_hw_addr);
     }
 
-    if (start_server(server_hw_addr, server_name, debug_log, &video_config, &audio_config) != 0) {
+    if (start_server(server_hw_addr, server_name, debug_log, &video_config, &audio_config, tcp, udp) != 0) {
         return 1;
     }
 
@@ -339,7 +383,8 @@ extern "C" void log_callback(void *cls, int level, const char *msg) {
 }
 
 int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
-                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config) {
+                 video_renderer_config_t const *video_config, audio_renderer_config_t const *audio_config,
+                 unsigned short tcp[2], unsigned short udp[3]) {
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
     raop_cbs.conn_init = conn_init;
@@ -382,6 +427,14 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     if (audio_renderer) audio_renderer->funcs->start(audio_renderer);
 
     unsigned short port = 0;
+    
+    /* option to chose which local network ports to use */
+    raop_set_timing_port(raop,udp[0]);        /* must be a UDP network port  */
+    raop_set_control_port(raop,udp[1]);       /* must be a UDP network port  */
+    raop_set_data_port(raop,udp[2]);          /* must be a UDP  network port  */
+    raop_set_mirror_data_port(raop,tcp[0]);   /* must be a TCP network port; must be port 7100 for IOS6 (or older) clients */
+    port = tcp[1];                            /* parent RAOP server port, must be a TCP network port  */
+
     raop_start(raop, &port);
     raop_set_port(raop, port);
 
@@ -395,7 +448,7 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     raop_set_dnssd(raop, dnssd);
 
     dnssd_register_raop(dnssd, port);
-    dnssd_register_airplay(dnssd, port + 1);
+    dnssd_register_airplay(dnssd, port + 1);  /* no socket associated with this port is opened */
 
     return 0;
 }
