@@ -189,7 +189,7 @@ static int
 raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
 {
     int tsock = -1;
-    unsigned short tport = 0;
+    unsigned short tport = raop_ntp->timing_lport;
 
     assert(raop_ntp);
 
@@ -348,6 +348,7 @@ raop_ntp_start(raop_ntp_t *raop_ntp, unsigned short *timing_lport)
     int use_ipv6 = 0;
 
     assert(raop_ntp);
+    raop_ntp->timing_lport = *timing_lport;
 
     MUTEX_LOCK(raop_ntp->run_mutex);
     if (raop_ntp->running || !raop_ntp->joined) {

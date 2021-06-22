@@ -133,7 +133,8 @@ raop_rtp_parse_remote(raop_rtp_t *raop_rtp, const unsigned char *remote, int rem
 
 raop_rtp_t *
 raop_rtp_init(logger_t *logger, raop_callbacks_t *callbacks, raop_ntp_t *ntp, const unsigned char *remote, int remotelen,
-              const unsigned char *aeskey, const unsigned char *aesiv, const unsigned char *ecdh_secret)
+              const unsigned char *aeskey, const unsigned char *aesiv, const unsigned char *ecdh_secret,
+              unsigned short control_lport, unsigned short data_lport)
 {
     raop_rtp_t *raop_rtp;
 
@@ -144,6 +145,8 @@ raop_rtp_init(logger_t *logger, raop_callbacks_t *callbacks, raop_ntp_t *ntp, co
     if (!raop_rtp) {
         return NULL;
     }
+    raop_rtp->control_lport = control_lport;
+    raop_rtp->data_lport = data_lport;
     raop_rtp->logger = logger;
     raop_rtp->ntp = ntp;
 
@@ -232,6 +235,8 @@ raop_rtp_init_sockets(raop_rtp_t *raop_rtp, int use_ipv6, int use_udp)
 
     assert(raop_rtp);
 
+    cport = raop_rtp->control_lport;
+    dport = raop_rtp->data_lport;
     csock = netutils_init_socket(&cport, use_ipv6, 1);
     dsock = netutils_init_socket(&dport, use_ipv6, 1);
 

@@ -25,7 +25,8 @@ typedef struct h264codec_s h264codec_t;
 
 raop_rtp_mirror_t *raop_rtp_mirror_init(logger_t *logger, raop_callbacks_t *callbacks, raop_ntp_t *ntp,
                                         const unsigned char *remote, int remotelen,
-                                        const unsigned char *aeskey, const unsigned char *ecdh_secret);
+                                        const unsigned char *aeskey, const unsigned char *ecdh_secret,
+                                        unsigned short mirror_data_lport);
 void raop_rtp_init_mirror_aes(raop_rtp_mirror_t *raop_rtp_mirror, uint64_t streamConnectionID);
 void raop_rtp_start_mirror(raop_rtp_mirror_t *raop_rtp_mirror, int use_udp, unsigned short *mirror_data_lport);
 
