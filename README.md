@@ -120,6 +120,21 @@ With [n]: use  **both TCP and UDP** on **three consecutive ports** starting at n
 
 **-v/-h**: Displays short help and version information.
 
+# Sharing mirrored windows in online meetings.
+
+The current version of gstreamer (used for displaying a mirrored screen) does
+not set the window title on X-windows (future releases will correct this),
+making the gstreamer window invisible to many online-meeting platforms (such as "Zoom").
+
+To make the window visible, give it a title (_e.g._, **rpiplay** ) using
+**xdotool**, which is usually installed on an X-windows system (if not,
+install it). From a command line, issue the command
+
+```xdotool select_window set_window --name "rpiplay" ```
+
+and use the mouse to select the rpiplay window.   The online-meeting
+application should now allow you to select the window for sharing.
+
 # Disclaimer
 
 All the resources in this repository are written using only freely available information from the internet. The code and related resources are meant for educational purposes only. It is the responsibility of the user to make sure all local laws are adhered to.
