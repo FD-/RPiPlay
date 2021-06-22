@@ -51,7 +51,7 @@ sudo apt-get install libssl-dev
 mkdir build
 cd build
 cmake ..
-make -j
+make
 ```
 
 GCC 5 or later is required.
@@ -112,10 +112,13 @@ At the moment, these options are implemented:
 
 **-ar renderer**: Select an audio renderer to use (rpi, gstreamer, or dummy)
 
+**-p[n]**:  Without optional [n]): use a "legacy" set of network ports TCP 7000,7001,7100; UDP 7011,6000,6001.
+With [n]: use  **both TCP and UDP** on **three consecutive ports** starting at n.  All ports must be in the range 1024-65535.
+(use "-p34567" (no space between -p and 34567) for n = 34567).  Use n=0 (e.g. -p[n] -p0) to see which  ports will be used.
+
 **-d**: Enables debug logging. Will lead to choppy playback due to heavy console output.
 
 **-v/-h**: Displays short help and version information.
-
 
 # Disclaimer
 
