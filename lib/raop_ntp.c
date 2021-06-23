@@ -189,10 +189,11 @@ static int
 raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
 {
     int tsock = -1;
-    unsigned short tport = raop_ntp->timing_lport;
+    unsigned short tport = 0;
 
     assert(raop_ntp);
 
+    tport = raop_ntp->timing_lport;
     tsock = netutils_init_socket(&tport, use_ipv6, 1);
 
     if (tsock == -1) {
