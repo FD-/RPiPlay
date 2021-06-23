@@ -287,10 +287,10 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "Error: \"%s\" sets invalid port range, (%d-%d is allowed).\n",argv[i],LOWEST_ALLOWED_PORT,HIGHEST_PORT);
                     exit(1);
                 } else if (l == 0) {
-                printf(" TCP network ports requested  %d %d (TCP %d may also be needed) \n", tcp[0], tcp[1], tcp[1] + (tcp[1] ? 1 : 0));                            ;
-                printf(" UDP network ports requested  %d %d %d \n", udp[0], udp[1], udp[2]);
-                printf(" a port value of 0 (default) means a random choice will be made.\n");	   
-                exit(0);
+                    printf(" TCP network ports requested  %d %d (TCP %d may also be needed) \n", tcp[0], tcp[1], tcp[1] + (tcp[1] ? 1 : 0));                            ;
+                    printf(" UDP network ports requested  %d %d %d \n", udp[0], udp[1], udp[2]);
+                    printf(" a port value of 0 (default) means a random choice will be made.\n");	   
+                    exit(0);
                 }
             for (int i =  0; i < 3; i++) {
                 udp[i] = (unsigned short) l;
