@@ -289,10 +289,9 @@ int main(int argc, char *argv[]) {
                     printf(" a port value of 0 (default) means a random choice will be made.\n");	   
                     exit(0);
                 }
-            for (int i =  0; i < 3; i++) {
-                udp[i] = (unsigned short) l;
-                if (i < 2) tcp[i] = (unsigned short) l;
-                if(l) l++;
+                for (int i =  0; i < 3; i++) {
+                    udp[i] = (unsigned short) l++;
+                    if (i < 2) tcp[i] = udp[i];
                 }
             }           
         } else if (arg == "-h" || arg == "-v") {
