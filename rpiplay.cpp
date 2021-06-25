@@ -270,16 +270,13 @@ int main(int argc, char *argv[]) {
         } else if (arg.substr(0,2) == "-p") {
             const char *str = const_cast<char*>((arg.substr(2,6)).c_str());
             if (!strlen(str)) {
-
-           /* legacy hard coded network port settings  (TCP and UDP)  */
-
-            tcp[0] = 7100;   /* local rtp mirror port: can be changed, except that TCP 7100 is required for mirroring IOS6 (or older) clients */
-            tcp[1] = 7000;   /* Airplay/RAOP server port: can be changed */
-	    /* rpiplay also registers TCP port (tcp[1] + 1) with the Bonjour server, but does not appear to use it  */  
-
-            udp[0] = 7011;   /* local ntp timing port, value taken from legay sources: can be changed */
-            udp[1] = 6001;   /* local rtp control port, value taken from legacy sources: can be changed */
-            udp[2] = 6000;   /* local rtp data port, value taken from legacy sources: can be changed */
+                /* legacy hard coded network port settings  (TCP and UDP)  */
+                tcp[0] = 7100;   /* local rtp mirror port: can be changed, except that TCP 7100 is required for mirroring IOS6 (or older) clients */
+                tcp[1] = 7000;   /* Airplay/RAOP server port: can be changed */
+                /* rpiplay also registers TCP port (tcp[1] + 1) with the Bonjour server, but does not appear to use it  */  
+                udp[0] = 7011;   /* local ntp timing port, value taken from legay sources: can be changed */
+                udp[1] = 6001;   /* local rtp control port, value taken from legacy sources: can be changed */
+                udp[2] = 6000;   /* local rtp data port, value taken from legacy sources: can be changed */
             } else {
                 char *end;
                 long l = strtol(str,&end,10);
