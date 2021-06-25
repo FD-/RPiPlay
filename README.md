@@ -130,7 +130,7 @@ To make the window visible, give it a title (_e.g._, **rpiplay** ) using
 **xdotool**, which is usually installed on an X-windows system (if not,
 install it). From a command line, issue the command
 
-```xdotool select_window set_window --name "rpiplay" ```
+```xdotool selectwindow set_window --name "rpiplay" ```
 
 and use the mouse to select the rpiplay window.   The online-meeting
 application should now allow you to select the window for sharing.
