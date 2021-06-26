@@ -123,7 +123,7 @@ With [n]: use  **both TCP and UDP** on **three consecutive ports** starting at n
 # Sharing mirrored windows in online meetings.
 
 Current versions of gstreamer (used for displaying a mirrored screen) do not
-set the window title in X-windows,  aking the gstreamer window invisible to
+set the window title in X-windows, making the gstreamer window invisible to
 many online-meeting platforms (such as "Zoom").  (Note: this will be corrected
 in the next stable release gstreamer 1.20).
 
