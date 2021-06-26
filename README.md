@@ -122,14 +122,14 @@ With [n]: use  **both TCP and UDP** on **three consecutive ports** starting at n
 
 # Sharing mirrored windows in online meetings.
 
-Older versions of gstreamer (used for displaying a mirrored screen) do
-not set the window title on X-windows 
-making the gstreamer window invisible to many online-meeting platforms (such as "Zoom").
-(Note: this is now corrected in  gst-plugins-base-1.19.1, released 2021-06-01).
+Current versions of gstreamer (used for displaying a mirrored screen) do not
+set the window title in X-windows,  aking the gstreamer window invisible to
+many online-meeting platforms (such as "Zoom").  (Note: this will be corrected
+in the next stable release gstreamer 1.20).
 
-To make the window visible with gst-plugins-base < 1.19.1, give it a title (_e.g._, **rpiplay** ) using
-**xdotool**, which is usually installed on an X-windows system (if not,
-install it). From a command line, issue the command
+To make the window visible with gstreamer < 1.19.1, set a title (_e.g._,**rpiplay** )
+using **xdotool**, which is usually installed on an X-windows system (if not, find
+it and install it. From a command line, issue the command
 
 ```xdotool selectwindow set_window --name "rpiplay" ```
 
