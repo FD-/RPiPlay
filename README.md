@@ -136,19 +136,21 @@ it and install it). From a command line, issue the command
 and use the mouse to select the rpiplay window.   The online-meeting
 application should now allow you to select the window for sharing.
 
-# Avahi's  warning that rpiplay _"uses the Apple Bonjour compaibility layer"._
+# Avahi's warning that rpiplay _"uses the Apple Bonjour compatibility layer"._
 
 When rpiplay starts you will see
 
-```*** WARNING *** The program 'rpiplay' uses the Apple Bonjour compatibility layer of Avahi.
+```
+*** WARNING *** The program 'rpiplay' uses the Apple Bonjour compatibility layer of Avahi.
 *** WARNING *** Please fix your application to use the native API of Avahi!
-*** WARNING *** For more information see <http://0pointer.de/blog/projects/avahi-compat.html>```
+*** WARNING *** For more information see <http://0pointer.de/blog/projects/avahi-compat.html>
+```
 
-This annoying message can be ignored (it is in fact even stated on the above-cited website to
-be there for "annoyance" purposes only), as the "compatibility layer" works fine.
-To suppress this annoying startup message, modify your environment with
+This annoying message can be ignored (it is even stated on the above-cited website to be
+there for "annoyance" purposes), as the "compatibility layer" works fine.  To
+suppress this annoying startup message, modify your environment with
 
-``export AVAHI_COMPAT_NOWARN=1``
+```export AVAHI_COMPAT_NOWARN=1```
 
 This can be made permanent by placing this line  in your .profile or .bashrc file, _etc._
 
