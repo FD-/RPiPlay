@@ -129,7 +129,7 @@ in the next stable release gstreamer 1.20).
 
 To make the window visible with gstreamer < 1.19.1, set a title (_e.g._,**rpiplay** )
 using **xdotool**, which is usually installed on an X-windows system (if not, find
-it and install it. From a command line, issue the command
+it and install it). From a command line, issue the command
 
 ```xdotool selectwindow set_window --name "rpiplay" ```
 
