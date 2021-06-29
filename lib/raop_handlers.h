@@ -372,14 +372,14 @@ raop_handler_setup(raop_conn_t *conn,
         plist_get_uint_val(time_note, &timing_rport);
         logger_log(conn->raop->logger, LOGGER_DEBUG, "timing_rport = %llu", timing_rport);
 
-        unsigned short timing_lport = (conn->raop)->timing_lport;
+        unsigned short timing_lport = conn->raop->timing_lport;
         conn->raop_ntp = raop_ntp_init(conn->raop->logger, conn->remote, conn->remotelen, timing_rport);
         raop_ntp_start(conn->raop_ntp, &timing_lport);
 
         conn->raop_rtp = raop_rtp_init(conn->raop->logger, &conn->raop->callbacks, conn->raop_ntp, conn->remote,conn->remotelen,
-                                       aeskey, aesiv, ecdh_secret, (conn->raop)->control_lport, (conn->raop)->data_lport);
+                                       aeskey, aesiv, ecdh_secret, conn->raop->control_lport, conn->raop->data_lport);
         conn->raop_rtp_mirror = raop_rtp_mirror_init(conn->raop->logger, &conn->raop->callbacks, conn->raop_ntp, conn->remote, conn->remotelen,
-                                                     aeskey, ecdh_secret, (conn->raop)->mirror_data_lport);
+                                                     aeskey, ecdh_secret, conn->raop->mirror_data_lport);
         plist_t res_event_port_node = plist_new_uint(conn->raop->port);
         plist_t res_timing_port_node = plist_new_uint(timing_lport);
         plist_dict_set_item(res_root_node, "timingPort", res_timing_port_node);
