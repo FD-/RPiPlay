@@ -429,7 +429,7 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     unsigned short port = raop_get_port(raop);
     raop_start(raop, &port);
     raop_set_port(raop, port);
-    
+
     int error;
     dnssd = dnssd_init(name.c_str(), strlen(name.c_str()), hw_addr.data(), hw_addr.size(), &error);
     if (error) {
