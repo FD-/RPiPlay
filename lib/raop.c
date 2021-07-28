@@ -45,7 +45,6 @@ struct raop_s {
     dnssd_t *dnssd;
 
     unsigned short port;
-
     unsigned short timing_lport;
     unsigned short control_lport;
     unsigned short data_lport;
@@ -360,21 +359,18 @@ raop_set_timing_port(raop_t *raop, unsigned short port) {
 }
 
 void
-raop_set_control_port(raop_t *raop, unsigned short port) {
+raop_set_udp_ports(raop_t *raop, unsigned short udp[3]) {
     assert(raop);
-    raop->control_lport = port;
+    raop->timing_lport = udp[0]; 
+    raop->control_lport = udp[1];
+    raop->data_lport = udp[2];
 }
 
 void
-raop_set_data_port(raop_t *raop, unsigned short port) {
+raop_set_tcp_ports(raop_t *raop, unsigned short tcp[2]) {
     assert(raop);
-    raop->data_lport = port;
-}
-
-void
-raop_set_mirror_data_port(raop_t *raop, unsigned short port) {
-    assert(raop);
-    raop->mirror_data_lport = port;
+    raop->mirror_data_lport = tcp[0];
+    raop->port = tcp[1];
 }
 
 unsigned short

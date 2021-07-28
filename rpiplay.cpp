@@ -422,18 +422,14 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     if (video_renderer) video_renderer->funcs->start(video_renderer);
     if (audio_renderer) audio_renderer->funcs->start(audio_renderer);
 
-    unsigned short port = 0;
-    
-    /* option to chose which local network ports to use */
-    raop_set_timing_port(raop,udp[0]);        /* must be a UDP network port  */
-    raop_set_control_port(raop,udp[1]);       /* must be a UDP network port  */
-    raop_set_data_port(raop,udp[2]);          /* must be a UDP  network port  */
-    raop_set_mirror_data_port(raop,tcp[0]);   /* must be a TCP network port; must be port 7100 for IOS6 (or older) clients */
-    port = tcp[1];                            /* parent RAOP server port, must be a TCP network port  */
+    /* write choice of local network ports to raop */
+    raop_set_udp_ports(raop,udp);    
+    raop_set_tcp_ports(raop,tcp);   
 
+    unsigned short port = raop_get_port(raop);
     raop_start(raop, &port);
     raop_set_port(raop, port);
-
+    
     int error;
     dnssd = dnssd_init(name.c_str(), strlen(name.c_str()), hw_addr.data(), hw_addr.size(), &error);
     if (error) {
@@ -444,7 +440,7 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     raop_set_dnssd(raop, dnssd);
 
     dnssd_register_raop(dnssd, port);
-    dnssd_register_airplay(dnssd, port + 1);  /* no socket associated with this port is opened */
+    dnssd_register_airplay(dnssd, port + 1);
 
     return 0;
 }
