@@ -353,12 +353,6 @@ raop_set_port(raop_t *raop, unsigned short port) {
 }
 
 void
-raop_set_timing_port(raop_t *raop, unsigned short port) {
-    assert(raop);
-    raop->timing_lport = port;
-}
-
-void
 raop_set_udp_ports(raop_t *raop, unsigned short udp[3]) {
     assert(raop);
     raop->timing_lport = udp[0]; 
