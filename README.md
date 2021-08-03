@@ -32,7 +32,7 @@ Note libplist-dev and (for ZOOMFIX) libx11-dev are new dependencies.
 
 Options:
 **-n server_name **;  server_name will be the name that appears offering
-AiRplay services to your iPad, iPhone etc.
+AirPlay services to your iPad, iPhone etc.
 **NEW**: this will also be the name on the mirror window, if "ZOOMFIX" is
 applied when compiling uxplay.
 
@@ -78,16 +78,16 @@ the mirrored window is now visible to screen-sharing applications such as
 Zoom.     You can tell if the "ZOOMFIX"
 is working by examining the title bar on the mirror window:
 it will be "uxplay" without the fix, and be the AirPlay server_name, which
-is UxPlay (note capitals) by default, and can be changed with the -n option.
+is "UxPlay" (note capitals) by default, and can be changed with the -n option.
 To compile with ZOOMFIX=ON, the X11 development libraries must be installed.
-(ZOOMFIX will not be needed once  gstreamer-1.20 is available, since this will
-make the gstreamer mirror window visible to screen-sharers.)
-
+(ZOOMFIX will not be needed once  gstreamer-1.20 is available, since this
+update will make the gstreamer mirror window visible to screen-sharers.)
+(Thanks to David Ventura  https://github.com/DavidVentura/UxPlay ).
 
 4. The avahi_compat nag warning on startup is suppressed.
 
 5.   In principle, multiple instances of uxplay can be run simultaneously
-using the -rm "random MAC address" option to give each a different
+using the -r "random MAC address" option to give each a different
 (randomly-chosen "local") MAC address.
 If the -p option is used, they also need separate network port choices.
 (However, there may be a large latency, and running two instances of uxplay

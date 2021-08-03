@@ -87,10 +87,12 @@ video_renderer_t *video_renderer_init(logger_t *logger, const char *server_name,
 	break;
     case HFLIP:
         g_string_append(launch, "videoflip method=horizontal-flip ! ");
-      break;
+        break;
     case VFLIP:
         g_string_append(launch, "videoflip method=vertical-flip ! ");
-     }
+    case NONE:
+    break;
+    }
     
     g_string_append(launch, "autovideosink name=video_sink sync=false");
     renderer->pipeline = gst_parse_launch(launch->str,  &error);
