@@ -515,6 +515,11 @@ static void video_renderer_rpi_flush(video_renderer_t *renderer) {
     r->first_packet_time = 0;
 }
 
+static bool video_renderer_rpi_listen(video_renderer_t *renderer) {
+    sleep(1);  
+    return false;
+}
+
 static void video_renderer_rpi_destroy(video_renderer_t *renderer) {
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     if (renderer) {
@@ -529,6 +534,7 @@ static const video_renderer_funcs_t video_renderer_rpi_funcs = {
     .start = video_renderer_rpi_start,
     .render_buffer = video_renderer_rpi_render_buffer,
     .flush = video_renderer_rpi_flush,
+    .listen = video_renderer_rpi.listen,
     .destroy = video_renderer_rpi_destroy,
     .update_background = video_renderer_rpi_update_background,
 };

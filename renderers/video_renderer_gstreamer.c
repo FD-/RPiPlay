@@ -22,6 +22,8 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <unistd.h>
 
 typedef struct video_renderer_gstreamer_s {
     video_renderer_t base;
@@ -143,7 +145,12 @@ static void video_renderer_gstreamer_render_buffer(video_renderer_t *renderer, r
 }
 
 void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
+}
 
+bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
+  printf(" sleeping\n");
+    sleep(1);  
+    return false;
 }
 
 void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
@@ -164,6 +171,7 @@ static const video_renderer_funcs_t video_renderer_gstreamer_funcs = {
     .start = video_renderer_gstreamer_start,
     .render_buffer = video_renderer_gstreamer_render_buffer,
     .flush = video_renderer_gstreamer_flush,
+    .listen = video_renderer_gstreamer_listen,
     .destroy = video_renderer_gstreamer_destroy,
     .update_background = video_renderer_gstreamer_update_background,
 };

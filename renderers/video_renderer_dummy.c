@@ -53,6 +53,11 @@ static void video_renderer_dummy_render_buffer(video_renderer_t *renderer, raop_
 static void video_renderer_dummy_flush(video_renderer_t *renderer) {
 }
 
+static bool video_renderer_dummy_listen(video_renderer_t *renderer) {
+    sleep(1);  
+    return false;
+}
+
 static void video_renderer_dummy_destroy(video_renderer_t *renderer) {
     if (renderer) {
         free(renderer);
@@ -67,6 +72,7 @@ static const video_renderer_funcs_t video_renderer_dummy_funcs = {
     .start = video_renderer_dummy_start,
     .render_buffer = video_renderer_dummy_render_buffer,
     .flush = video_renderer_dummy_flush,
+    .listen = video_renderer_dummy_listen,
     .destroy = video_renderer_dummy_destroy,
     .update_background = video_renderer_dummy_update_background,
 };
