@@ -144,10 +144,10 @@ static void video_renderer_gstreamer_render_buffer(video_renderer_t *renderer, r
     gst_app_src_push_buffer(GST_APP_SRC(r->appsrc), buffer);
 }
 
-void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
+static void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
 }
 
-bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
+static bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
     video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     GstMessage *msg = NULL;
 
@@ -182,7 +182,7 @@ bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
     return false;
 }
 
-void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
+static void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
     video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     gst_app_src_end_of_stream(GST_APP_SRC(r->appsrc));
     gst_element_set_state(r->pipeline, GST_STATE_NULL);
@@ -192,7 +192,7 @@ void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
     }
 }
 
-void video_renderer_gstreamer_update_background(video_renderer_t *renderer, int type) {
+static void video_renderer_gstreamer_update_background(video_renderer_t *renderer, int type) {
 
 }
 
