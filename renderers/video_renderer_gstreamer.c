@@ -22,12 +22,11 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <unistd.h>
 
 typedef struct video_renderer_gstreamer_s {
     video_renderer_t base;
     GstElement *appsrc, *pipeline, *sink;
+    GstBus *bus;
 } video_renderer_gstreamer_t;
 
 static const video_renderer_funcs_t video_renderer_gstreamer_funcs;
@@ -129,6 +128,7 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer
 static void video_renderer_gstreamer_start(video_renderer_t *renderer) {
     video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     gst_element_set_state(r->pipeline, GST_STATE_PLAYING);
+    r->bus = gst_element_get_bus(r->pipeline);
 }
 
 static void video_renderer_gstreamer_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts, int type) {
@@ -148,8 +148,37 @@ void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
 }
 
 bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
-  printf(" sleeping\n");
-    sleep(1);  
+    video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
+    GstMessage *msg = NULL;
+
+    /* listen  on the gstreamer pipeline bus for an error or EOS.   */
+    /* return true if this occurs, and false if 100 millisecs have */
+    /* elapsed with no such event occuring.                         */
+
+    msg = gst_bus_timed_pop_filtered(r->bus, 100 *  GST_MSECOND,
+                                     GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+    /* parse message */
+    if (msg != NULL)  {
+        GError *err;
+        gchar *debug_info;
+
+        switch (GST_MESSAGE_TYPE (msg)) {
+        case GST_MESSAGE_ERROR:
+            gst_message_parse_error (msg, &err, &debug_info);
+            g_printerr("GStreamer: %s\n", err->message);
+            g_clear_error (&err);
+            g_free (debug_info);
+            break;
+        case GST_MESSAGE_EOS:
+            g_print("End-Of-Stream reached.\n");
+            break;
+        default:
+            g_printerr("unexpected message\n");
+            break;
+        }
+        gst_message_unref(msg);
+        return true;
+    }
     return false;
 }
 
