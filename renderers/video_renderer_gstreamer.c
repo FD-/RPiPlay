@@ -185,6 +185,7 @@ static bool video_renderer_gstreamer_listen(video_renderer_t *renderer) {
 static void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
     video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     gst_app_src_end_of_stream(GST_APP_SRC(r->appsrc));
+    gst_object_unref(r->bus);
     gst_element_set_state(r->pipeline, GST_STATE_NULL);
     gst_object_unref(r->pipeline);
     if (renderer) {
