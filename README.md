@@ -91,6 +91,40 @@ After building, to install the executable on the system permanently (so it can b
 sudo make install
 ```
 
+# Autostart on boot using Systemd
+
+While you could just make a cron or rc entry to run the command on boot, the more "appropriate" way would be to create a systemd service. Create a new service file using:
+```bash
+sudo nano /etc/systemd/system/rpiplay.service
+```
+The contents of the file should be similar to:
+```cfg
+[Unit]
+Description=RPi Play Service
+After=network.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=pi # or your username
+ExecStart=/usr/bin/rpiplay # replace with the path of rpiplay and add the options you require
+[Install]
+WantedBy=multi-user.target
+```
+Save the file & exit (Ctrl+O, enter, Ctrl+X). Enable the service to start on boot (might require sudo): 
+```bash
+systemctl enable rpiplay
+```
+Done. You can now reboot, or to simply test if it works:
+```bash
+systemctl start rpiplay
+```
+To stop/restart:
+```bash
+systemctl stop rpiplay
+systemctl restart rpiplay
+```
 # Usage
 
 Start the rpiplay executable and an AirPlay mirror target device will appear in the network.
