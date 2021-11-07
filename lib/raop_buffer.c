@@ -174,8 +174,19 @@ raop_buffer_decrypt(raop_buffer_t *raop_buffer, unsigned char *data, unsigned ch
     encryptedlen = payload_size / 16*16;
     memset(output, 0, payload_size);
     // Need to be initialized internally
+    // Note: adding 15 to encryptedlen in the call to aes_cbc_decrypt below ensures that
+    // the OpenSSL function EVP_DecryptUpdate which is called in crypto.c
+    // decrypts all the 16-byte encrypted blocks in the encrypted portion of the payload.
+    // Without this fix, the last 16-byte encrypted block is left containing whatever memset (above) wrote into it
+    // i.e. 0's.    This is because EVP_DecryptUpdate expects that the last part of the decryption
+    // will be done by a call to EVP_DecryptFinal, which (if needed)  decrypts the last encrypted block, and adds
+    // the unencrypted remainder.
+    // The unencrypted remainder is handled below without using EVP_DecryptFinal;
+    // telling EVP_DecryptUpdate that the packet length is encryptedlen + 15 seems to trick it
+    // into decrypting all the encrypted blocks.   (This fix is for cbc only,  not needed in aes_ctr_decrypt,
+    // where decryption of each block is independent of previous blocks, whereas cbc is sequential).
     aes_ctx_t *aes_ctx_audio = aes_cbc_init(raop_buffer->aeskey, raop_buffer->aesiv, AES_DECRYPT);
-    aes_cbc_decrypt(aes_ctx_audio, &data[12], output, encryptedlen);
+    aes_cbc_decrypt(aes_ctx_audio, &data[12], output, encryptedlen + 15);
     aes_cbc_destroy(aes_ctx_audio);
 
     memcpy(output + encryptedlen, &data[12 + encryptedlen], payload_size - encryptedlen);
