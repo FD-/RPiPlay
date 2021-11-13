@@ -5,3 +5,4 @@ include_directories(.)
 add_library( playfair
         STATIC
         ${DIR_SRCS})
+install(TARGETS playfair ARCHIVE DESTINATION lib)

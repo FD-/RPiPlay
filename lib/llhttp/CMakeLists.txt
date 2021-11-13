@@ -5,3 +5,4 @@ include_directories(.)
 add_library( llhttp
         STATIC
         ${DIR_SRCS})
+install(TARGETS llhttp ARCHIVE DESTINATION lib)

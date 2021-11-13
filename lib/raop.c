@@ -240,7 +240,9 @@ conn_destroy(void *ptr) {
         raop_rtp_mirror_destroy(conn->raop_rtp_mirror);
     }
 
-    conn->raop->callbacks.video_flush(conn->raop->callbacks.cls);
+    if (conn->raop->callbacks.video_flush) {
+      conn->raop->callbacks.video_flush(conn->raop->callbacks.cls);
+    }
 
     free(conn->local);
     free(conn->remote);

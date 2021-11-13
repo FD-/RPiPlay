@@ -1,0 +1,11 @@
+prefix=@DEST_DIR@
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: libairplay
+Description: Library for working with the AirPlay protocol.
+Version: 0.1
+
+Libs: -L${libdir} -lairplay @PRIVATE_LIBS@
+Cflags: -I${includedir}
