@@ -454,8 +454,7 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
         OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->video_decoder, 130, 0);
         if (buffer == NULL) logger_log(renderer->logger, LOGGER_ERR, "Got NULL buffer!");
         if (!buffer)
-            exit(-1);
-            //break;
+            break;
 
         int64_t video_delay = ((int64_t) raop_ntp_get_local_time(ntp)) - ((int64_t) pts);
         logger_log(renderer->logger, LOGGER_DEBUG, "Video delay is %lld", video_delay);
@@ -516,6 +515,11 @@ static void video_renderer_rpi_flush(video_renderer_t *renderer) {
     r->first_packet_time = 0;
 }
 
+static bool video_renderer_rpi_callback(video_renderer_t *renderer) {
+    sleep(1);  
+    return false;
+}
+
 static void video_renderer_rpi_destroy(video_renderer_t *renderer) {
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     if (renderer) {
@@ -530,6 +534,7 @@ static const video_renderer_funcs_t video_renderer_rpi_funcs = {
     .start = video_renderer_rpi_start,
     .render_buffer = video_renderer_rpi_render_buffer,
     .flush = video_renderer_rpi_flush,
+    .callback = video_renderer_rpi.callback,
     .destroy = video_renderer_rpi_destroy,
     .update_background = video_renderer_rpi_update_background,
 };
