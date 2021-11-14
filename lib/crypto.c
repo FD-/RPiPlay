@@ -68,25 +68,32 @@ aes_ctx_t *aes_init(const uint8_t *key, const uint8_t *iv, const EVP_CIPHER *typ
 
     memcpy(ctx->key, key, AES_128_BLOCK_SIZE);
     memcpy(ctx->iv, iv, AES_128_BLOCK_SIZE);
+    EVP_CIPHER_CTX_set_padding(ctx->cipher_ctx, 0);
     return ctx;
 }
 
 void aes_encrypt(aes_ctx_t *ctx, const uint8_t *in, uint8_t *out, int in_len) {
-    int out_len = 0;
-    if (!EVP_EncryptUpdate(ctx->cipher_ctx, out, &out_len, in, in_len)) {
+    int out_len_e = 0;
+    if (!EVP_EncryptUpdate(ctx->cipher_ctx, out, &out_len_e, in, in_len)) {
         handle_error(__func__);
     }
-
-    assert(out_len <= in_len);
+    int out_len_f = in_len - out_len_e;
+    if (!EVP_EncryptFinal_ex(ctx->cipher_ctx, out + out_len_e, &out_len_f)) {
+        handle_error(__func__);
+    }
+    assert(out_len_e + out_len_f <= in_len);
 }
 
 void aes_decrypt(aes_ctx_t *ctx, const uint8_t *in, uint8_t *out, int in_len) {
-    int out_len = 0;
-    if (!EVP_DecryptUpdate(ctx->cipher_ctx, out, &out_len, in, in_len)) {
+    int out_len_d = 0;
+    if (!EVP_DecryptUpdate(ctx->cipher_ctx, out, &out_len_d, in, in_len)) {
         handle_error(__func__);
     }
-
-    assert(out_len <= in_len);
+    int out_len_f = in_len - out_len_d;
+    if (!EVP_DecryptFinal_ex(ctx->cipher_ctx, out + out_len_d, &out_len_f)) {
+        handle_error(__func__);
+    }
+    assert(out_len_f + out_len_d <= in_len);
 }
 
 void aes_destroy(aes_ctx_t *ctx) {
