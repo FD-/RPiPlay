@@ -526,7 +526,7 @@ static void video_renderer_rpi_destroy(video_renderer_t *renderer) {
     }
 }
 
-static bool video_renderer_pi_callback(video_renderer_t *renderer) {
+static bool video_renderer_pi_loop_exit(video_renderer_t *renderer) {
     sleep(1);
     return false;
 }
@@ -536,6 +536,6 @@ static const video_renderer_funcs_t video_renderer_rpi_funcs = {
     .render_buffer = video_renderer_rpi_render_buffer,
     .flush = video_renderer_rpi_flush,
     .destroy = video_renderer_rpi_destroy,
-    .callback = video_renderer_rpi_callback,
+    .loop_exit = video_renderer_rpi_loop_exit,
     .update_background = video_renderer_rpi_update_background,
 };

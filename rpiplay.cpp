@@ -272,7 +272,7 @@ int main(int argc, char *argv[]) {
 
     running = true;
     while (running) {
-        if (video_renderer->funcs->callback(video_renderer)) {
+        if (video_renderer->funcs->loop_exit(video_renderer)) {
             break;
         }
     }

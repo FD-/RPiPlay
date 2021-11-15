@@ -63,7 +63,7 @@ static void video_renderer_dummy_update_background(video_renderer_t *renderer, i
 
 }
 
-static bool video_renderer_dummy_callback(video_renderer_t *renderer) {
+static bool video_renderer_dummy_loop_exit(video_renderer_t *renderer) {
     sleep(1);
     return false;
 }
@@ -73,6 +73,6 @@ static const video_renderer_funcs_t video_renderer_dummy_funcs = {
     .render_buffer = video_renderer_dummy_render_buffer,
     .flush = video_renderer_dummy_flush,
     .destroy = video_renderer_dummy_destroy,
-    .callback = video_renderer_dummy_callback,
+    .loop_exit = video_renderer_dummy_loop_exit,
     .update_background = video_renderer_dummy_update_background,
 };

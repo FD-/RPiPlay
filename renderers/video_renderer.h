@@ -68,7 +68,7 @@ typedef struct video_renderer_funcs_s {
     void (*render_buffer)(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts, int type);
     void (*flush)(video_renderer_t *renderer);
     void (*destroy)(video_renderer_t *renderer);
-    bool (*callback)(video_renderer_t *renderer);
+    bool (*loop_exit)(video_renderer_t *renderer);
     /**
      * Update background according to background mode and connection activity
      * @param renderer
