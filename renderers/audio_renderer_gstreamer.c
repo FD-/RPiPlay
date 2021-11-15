@@ -105,12 +105,12 @@ audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer
     return &renderer->base;
 }
 
-void audio_renderer_gstreamer_start(audio_renderer_t *renderer) {
+static void audio_renderer_gstreamer_start(audio_renderer_t *renderer) {
     audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
     gst_element_set_state(r->pipeline, GST_STATE_PLAYING);
 }
 
-void audio_renderer_gstreamer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts) {
+static void audio_renderer_gstreamer_render_buffer(audio_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len, uint64_t pts) {
     GstBuffer *buffer;
 
     if (data_len == 0) return;
@@ -125,7 +125,7 @@ void audio_renderer_gstreamer_render_buffer(audio_renderer_t *renderer, raop_ntp
 
 }
 
-void audio_renderer_gstreamer_set_volume(audio_renderer_t *renderer, float volume) {
+static void audio_renderer_gstreamer_set_volume(audio_renderer_t *renderer, float volume) {
     audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
     float avol;
     if (fabs(volume) < 28) {
@@ -134,10 +134,10 @@ void audio_renderer_gstreamer_set_volume(audio_renderer_t *renderer, float volum
     }
 }
 
-void audio_renderer_gstreamer_flush(audio_renderer_t *renderer) {
+static void audio_renderer_gstreamer_flush(audio_renderer_t *renderer) {
 }
 
-void audio_renderer_gstreamer_destroy(audio_renderer_t *renderer) {
+static void audio_renderer_gstreamer_destroy(audio_renderer_t *renderer) {
     audio_renderer_gstreamer_t *r = (audio_renderer_gstreamer_t *)renderer;
     gst_app_src_end_of_stream(GST_APP_SRC(r->appsrc));
     gst_element_set_state(r->pipeline, GST_STATE_NULL);

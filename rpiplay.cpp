@@ -272,7 +272,9 @@ int main(int argc, char *argv[]) {
 
     running = true;
     while (running) {
-        sleep(1);
+        if (video_renderer->funcs->callback(video_renderer)) {
+            break;
+        }
     }
 
     LOGI("Stopping...");

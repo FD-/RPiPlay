@@ -22,6 +22,7 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
+#include <unistd.h>
 
 typedef struct video_renderer_gstreamer_s {
     video_renderer_t base;
@@ -120,7 +121,6 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer
 
     renderer->appsrc = gst_bin_get_by_name(GST_BIN(renderer->pipeline), "video_source");
     renderer->sink = gst_bin_get_by_name(GST_BIN(renderer->pipeline), "video_sink");
-
     return &renderer->base;
 }
 
@@ -142,11 +142,11 @@ static void video_renderer_gstreamer_render_buffer(video_renderer_t *renderer, r
     gst_app_src_push_buffer(GST_APP_SRC(r->appsrc), buffer);
 }
 
-void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
+static void video_renderer_gstreamer_flush(video_renderer_t *renderer) {
 
 }
 
-void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
+static void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
     video_renderer_gstreamer_t *r = (video_renderer_gstreamer_t *)renderer;
     gst_app_src_end_of_stream(GST_APP_SRC(r->appsrc));
     gst_element_set_state(r->pipeline, GST_STATE_NULL);
@@ -156,8 +156,12 @@ void video_renderer_gstreamer_destroy(video_renderer_t *renderer) {
     }
 }
 
-void video_renderer_gstreamer_update_background(video_renderer_t *renderer, int type) {
+static void video_renderer_gstreamer_update_background(video_renderer_t *renderer, int type) {
 
+}
+
+static bool video_renderer_gstreamer_callback(video_renderer_t *renderer) {
+    return false;
 }
 
 static const video_renderer_funcs_t video_renderer_gstreamer_funcs = {
@@ -165,5 +169,6 @@ static const video_renderer_funcs_t video_renderer_gstreamer_funcs = {
     .render_buffer = video_renderer_gstreamer_render_buffer,
     .flush = video_renderer_gstreamer_flush,
     .destroy = video_renderer_gstreamer_destroy,
+    .callback = video_renderer_gstreamer_callback,
     .update_background = video_renderer_gstreamer_update_background,
 };
