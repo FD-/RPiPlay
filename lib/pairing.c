@@ -128,10 +128,13 @@ int
 pairing_session_check_handshake_status(pairing_session_t *session)
 {
     assert(session);
-    if (session->status != STATUS_SETUP) {
+    switch(session->status) {
+    case STATUS_SETUP:
+    case STATUS_HANDSHAKE:
+        return 0;
+    default:
         return -1;
     }
-    return 0;
 }
 
 int
