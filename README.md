@@ -84,6 +84,21 @@ make
 
 Note: The -b, -r, -l, and -a options are not supported with the gstreamer renderer.
 
+# Making your device discoverable on the network
+```
+For RPiPlay to work correctly, you need to start (or start and enable) the avahi-daemon service on your system. This will make your device discoverable on the network.
+
+Use
+
+        systemctl start avahi-daemon.service
+
+to start the daemon now or
+
+        systemctl enable --now avahi-daemon.service
+
+to start the daemon on every boot and now.
+``` 
+
 # Global installation
 
 After building, to install the executable on the system permanently (so it can be run from anywhere), simply run the following command:
