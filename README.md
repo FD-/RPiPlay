@@ -64,7 +64,7 @@ For building on desktop linux, follow these steps as per your distribution:
 ```bash
 sudo apt-get install cmake libavahi-compat-libdnssd-dev libplist-dev libssl-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
-    gstreamer1.0-vaapi gstreamer1.0-plugins-bad
+    gstreamer1.0-vaapi gstreamer1.0-plugins-bad build-essential
 mkdir build
 cd build
 cmake ..
