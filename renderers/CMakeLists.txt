@@ -16,6 +16,21 @@ set( RENDERER_SOURCES audio_renderer_dummy.c video_renderer_dummy.c )
 set( RENDERER_LINK_LIBS "" )
 set( RENDERER_INCLUDE_DIRS "" )
 
+# Flag to compile AAC decoder
+set( NEED_AAC_COMPILE false )
+
+# Check Alsa lib
+find_package( ALSA )
+if( ALSA_FOUND )
+  set( RENDERER_FLAGS "${RENDERER_FLAGS} -LASOUND -DHAS_ALSA_RENDERER" )
+  set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_alsa.c )
+  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ${ALSA_LIBRARIES} )
+  set( RENDERER_INCLUDE_DIRS ${RENDERER_INCLUDE_DIRS} ${ALSA_INCLUDE_DIRS} )
+  set( NEED_AAC_COMPILE true )
+else()
+  message( STATUS "ALSA not found, skipping compilation of ALSA" )
+endif()
+
 # Check for availability of OpenMAX libraries on Raspberry Pi
 find_library( BRCM_GLES_V2 brcmGLESv2 HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
 find_library( BRCM_EGL brcmEGL HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
@@ -32,9 +47,7 @@ if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM 
   	${CMAKE_SYSROOT}/opt/vc/include/interface/vmcs_host/linux 
   	${CMAKE_SYSROOT}/opt/vc/src/hello_pi/libs/ilclient )
 
-  option(BUILD_SHARED_LIBS "" OFF)
-  add_subdirectory(fdk-aac EXCLUDE_FROM_ALL)
-  add_subdirectory( h264-bitstream )
+  set( NEED_AAC_COMPILE true )
 
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX   -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM -Wno-psabi" )
   
@@ -47,9 +60,18 @@ if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM 
 
   set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_RPI_RENDERER" )
   set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_rpi.c video_renderer_rpi.c )
-  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ilclient airplay fdk-aac h264-bitstream )
+  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ilclient )
 else()
   message( STATUS "OpenMAX libraries not found, skipping compilation of Raspberry Pi renderer" )
+endif()
+
+# Need add AAC decoder lib
+if( NEED_AAC_COMPILE )
+  option(BUILD_SHARED_LIBS "" OFF)
+  add_subdirectory(fdk-aac EXCLUDE_FROM_ALL)
+  add_subdirectory( h264-bitstream )
+
+  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} airplay fdk-aac h264-bitstream )
 endif()
 
 # Check for availability of gstreamer

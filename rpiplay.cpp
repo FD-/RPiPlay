@@ -100,6 +100,9 @@ static const audio_renderer_list_entry_t audio_renderers[] = {
 #if defined(HAS_GSTREAMER_RENDERER)
     {"gstreamer", "GStreamer audio renderer", audio_renderer_gstreamer_init},
 #endif
+#if defined(HAS_ALSA_RENDERER)
+    {"alsa", "Alsa renderer", audio_renderer_alsa_init},
+#endif
 #if defined(HAS_DUMMY_RENDERER)
     {"dummy", "Dummy renderer; does not actually play audio", audio_renderer_dummy_init},
 #endif
@@ -252,9 +255,15 @@ int main(int argc, char *argv[]) {
         } else if (arg == "-a") {
             if (i == argc - 1) continue;
             std::string audio_device_name(argv[++i]);
-            audio_config.device = audio_device_name == "hdmi" ? AUDIO_DEVICE_HDMI :
-                                  audio_device_name == "analog" ? AUDIO_DEVICE_ANALOG :
-                                  AUDIO_DEVICE_NONE;
+            if ( audio_device_name.substr(0, 2) != "hw" ) {
+                audio_config.device = audio_device_name == "hdmi" ? AUDIO_DEVICE_HDMI :
+                                      audio_device_name == "analog" ? AUDIO_DEVICE_ANALOG :
+                                      AUDIO_DEVICE_NONE;
+                audio_config.alsaString = nullptr;
+            } else {
+                audio_config.alsaString = argv[i];
+            }
+
         } else if (arg == "-l") {
             video_config.low_latency = !video_config.low_latency;
             audio_config.low_latency = !audio_config.low_latency;
