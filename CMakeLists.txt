@@ -14,6 +14,12 @@ set (CMAKE_CXX_STANDARD 11)
 
 set (RENDERER_FLAGS "")
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(DNSSD REQUIRED avahi-compat-libdns_sd)
+pkg_check_modules(PLIST REQUIRED libplist-2.0)
+link_directories(${DNS_SD_LIBRARY_DIRS})
+link_directories(${PLIST_LIBRARY_DIRS})
+
 add_subdirectory(lib/playfair)
 add_subdirectory(lib/llhttp)
 add_subdirectory(lib)
@@ -23,6 +29,6 @@ add_subdirectory(renderers)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RENDERER_FLAGS}" )
 
 add_executable( rpiplay rpiplay.cpp)
-target_link_libraries ( rpiplay renderers airplay )
+target_link_libraries ( rpiplay renderers airplay ${PLIST_LIBRARIES})
 
 install(TARGETS rpiplay RUNTIME DESTINATION bin)

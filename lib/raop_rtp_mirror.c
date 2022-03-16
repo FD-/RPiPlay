@@ -30,6 +30,9 @@
 #include "mirror_buffer.h"
 #include "stream.h"
 
+#ifdef __FreeBSD__
+#define SOL_TCP 6
+#endif
 
 struct h264codec_s {
     unsigned char compatibility;
