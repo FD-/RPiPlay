@@ -116,6 +116,34 @@ At the moment, these options are implemented:
 
 **-v/-h**: Displays short help and version information.
 
+# Docker
+
+RPiPlay can be used in a docker environment
+
+You can build an image from sources it using following command:
+```
+docker build . -t rpiplay:dev
+```
+
+Example docker-compose yaml for running it
+
+```
+---
+version: "2.1"
+services:
+  rpiplay:
+    container_name: rpiplay
+    image: rpiplay:dev
+    restart: always
+    network_mode: host
+    command: -n "test" -a off
+    volumes:
+      - /opt/vc:/opt/vc
+      - /var/run/dbus:/var/run/dbus
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
+    devices:
+      - /dev/vchiq
+```
 
 # Disclaimer
 
