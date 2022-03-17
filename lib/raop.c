@@ -31,6 +31,10 @@
 #include "raop_rtp_mirror.h"
 #include "raop_ntp.h"
 
+unsigned int info_display_width = 1920;
+unsigned int info_display_height = 1080;
+unsigned int info_display_framerate = 60;
+
 struct raop_s {
     /* Callbacks for audio and video */
     raop_callbacks_t callbacks;
@@ -338,6 +342,14 @@ void
 raop_set_port(raop_t *raop, unsigned short port) {
     assert(raop);
     raop->port = port;
+}
+
+void
+raop_set_display(raop_t *raop, unsigned short display_width, unsigned short display_height, unsigned short display_framerate) {
+    assert(raop);
+	info_display_width = display_width;
+	info_display_height = display_height;
+	info_display_framerate = display_framerate;
 }
 
 unsigned short

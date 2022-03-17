@@ -116,6 +116,12 @@ At the moment, these options are implemented:
 
 **-v/-h**: Displays short help and version information.
 
+**-x**: Set display width
+
+**-y**: Set display height
+
+**-z**: Set display framerate(in float)  
+(ex: 60.0, 30.0, etc...)
 
 # Disclaimer
 
