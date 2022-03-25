@@ -22,7 +22,7 @@ By using OpenSSL for AES decryption, I was able to speed up the decryption of vi
 There still are some minor issues. Have a look at the TODO list below.
 
 RPiPlay might not be suitable for remote video playback, as it lacks a dedicated component for that: It seems like AirPlay on an AppleTV effectively runs a web server on the device and sends the URL to the AppleTV, thus avoiding the re-encoding of the video.
-For rough details, refer to the (mostly obsolete) [inofficial AirPlay specification](https://nto.github.io/AirPlay.html#screenmirroring).
+For rough details, refer to the (mostly obsolete) [unofficial AirPlay specification](https://nto.github.io/AirPlay.html#screenmirroring).
 
 
 
@@ -91,6 +91,40 @@ After building, to install the executable on the system permanently (so it can b
 sudo make install
 ```
 
+# Autostart on boot using Systemd
+
+While you could just make a cron or rc entry to run the command on boot, the more "appropriate" way would be to create a systemd service. Create a new service file using:
+```bash
+sudo nano /etc/systemd/system/rpiplay.service
+```
+The contents of the file should be similar to:
+```cfg
+[Unit]
+Description=RPi Play Service
+After=network.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=pi # or your username
+ExecStart=/usr/bin/rpiplay # replace with the path of rpiplay and add the options you require
+[Install]
+WantedBy=multi-user.target
+```
+Save the file & exit (Ctrl+O, enter, Ctrl+X). Enable the service to start on boot (might require sudo): 
+```bash
+systemctl enable rpiplay
+```
+Done. You can now reboot, or to simply test if it works:
+```bash
+systemctl start rpiplay
+```
+To stop/restart:
+```bash
+systemctl stop rpiplay
+systemctl restart rpiplay
+```
 # Usage
 
 Start the rpiplay executable and an AirPlay mirror target device will appear in the network.
