@@ -328,7 +328,7 @@ static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_nt
         if (audio_delay > 100000)
             r->first_packet_time = 0;
 
-        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->audio_renderer, 100, 0);
+        OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->audio_renderer, 100, 1);
         if (!buffer)
             break;
 
