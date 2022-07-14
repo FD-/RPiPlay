@@ -65,7 +65,7 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer
     renderer->base.funcs = &video_renderer_gstreamer_funcs;
     renderer->base.type = VIDEO_RENDERER_GSTREAMER;
 
-    assert(check_plugins());
+    g_assert(check_plugins());
 
     // Begin the video pipeline
     GString *launch = g_string_new("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
