@@ -43,7 +43,12 @@
 
 #define VERSION "1.2"
 
-#define DEFAULT_NAME "RPiPlay"
+#if defined(__x86_64__)
+    #define DEFAULT_NAME "RPiPlayPC"
+#else
+    #define DEFAULT_NAME "RPiPlayNOTPC"
+#endif 
+
 #define DEFAULT_BACKGROUND_MODE BACKGROUND_MODE_ON
 #define DEFAULT_AUDIO_DEVICE AUDIO_DEVICE_HDMI
 #define DEFAULT_LOW_LATENCY false
@@ -115,13 +120,12 @@ static void signal_handler(int sig) {
 }
 
 static void init_signals(void) {
-    struct sigaction sigact;
-
-    sigact.sa_handler = signal_handler;
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_flags = 0;
-    sigaction(SIGINT, &sigact, NULL);
-    sigaction(SIGTERM, &sigact, NULL);
+    //struct sigaction sigact;
+    //sigact.sa_handler = signal_handler;
+    //sigemptyset(&sigact.sa_mask);
+    //sigact.sa_flags = 0;
+    //sigaction(SIGINT, &sigact, NULL);
+    //sigaction(SIGTERM, &sigact, NULL);
 }
 
 static int parse_hw_addr(std::string str, std::vector<char> &hw_addr) {
@@ -305,6 +309,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    LOGI("Running...");
     running = true;
     while (running) {
         sleep(1);
@@ -312,15 +317,29 @@ int main(int argc, char *argv[]) {
 
     LOGI("Stopping...");
     stop_server();
+
+    LOGI("Done.");
+
+    exit(0);
 }
 
 // Server callbacks
 extern "C" void conn_init(void *cls) {
-    if (video_renderer) video_renderer->funcs->update_background(video_renderer, 1);
+    LOGI("conn_init");
+
+    if (video_renderer) {
+        video_renderer->funcs->conn_init(video_renderer);
+        video_renderer->funcs->update_background(video_renderer, 1);
+    }
 }
 
 extern "C" void conn_destroy(void *cls) {
-    if (video_renderer) video_renderer->funcs->update_background(video_renderer, -1);
+    LOGI("conn_destroy");
+
+    if (video_renderer) {
+        video_renderer->funcs->conn_destroy(video_renderer);
+        video_renderer->funcs->update_background(video_renderer, -1);
+    }
 }
 
 extern "C" void audio_process(void *cls, raop_ntp_t *ntp, aac_decode_struct *data) {

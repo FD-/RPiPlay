@@ -52,9 +52,11 @@ else()
   message( STATUS "OpenMAX libraries not found, skipping compilation of Raspberry Pi renderer" )
 endif()
 
+
 # Check for availability of gstreamer
 find_package( PkgConfig )
-if( PKG_CONFIG_FOUND )
+#if( PKG_CONFIG_FOUND )
+if ( 0 )
   pkg_check_modules( GST gstreamer-1.0>=1.4
                          gstreamer-sdp-1.0>=1.4
                          gstreamer-video-1.0>=1.4

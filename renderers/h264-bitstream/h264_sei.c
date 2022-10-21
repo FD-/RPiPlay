@@ -684,7 +684,9 @@ void read_debug_sei_payload( h264_stream_t* h, bs_t* b )
             }
             
             for ( i = 0; i < s->payloadSize; i++ )
+            {
                 printf("%ld.%d: ", (long int)(b->p - b->start), b->bits_left); s->data[i] = bs_read_u8(b); printf("s->data[i]: %d \n", s->data[i]); 
+            }
     }
     
     //if( 1 )

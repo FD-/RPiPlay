@@ -195,17 +195,23 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
             logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP not initialized at FLUSH");
         }
     } else if (!strcmp(method, "TEARDOWN")) {
+        logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP teardown start");
         //http_response_add_header(*response, "Connection", "close");
         if (conn->raop_rtp != NULL && raop_rtp_is_running(conn->raop_rtp)) {
             /* Destroy our RTP session */
+        	logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP destroying our RTP session");
             raop_rtp_stop(conn->raop_rtp);
+        	logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP destroyed our RTP session");
         } else if (conn->raop_rtp_mirror) {
             /* Destroy our sessions */
+        	logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP destroying our sessions");
             raop_rtp_destroy(conn->raop_rtp);
             conn->raop_rtp = NULL;
             raop_rtp_mirror_destroy(conn->raop_rtp_mirror);
             conn->raop_rtp_mirror = NULL;
+        	logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP destroyed our sessions");
         }
+        logger_log(conn->raop->logger, LOGGER_WARNING, "RAOP teardown done");
     }
     if (handler != NULL) {
         handler(conn, request, *response, &response_data, &response_datalen);
@@ -216,6 +222,7 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
         response_data = NULL;
         response_datalen = 0;
     }
+    logger_log(conn->raop->logger, LOGGER_DEBUG, "conn_request done");
 }
 
 static void
@@ -240,13 +247,22 @@ conn_destroy(void *ptr) {
         raop_rtp_mirror_destroy(conn->raop_rtp_mirror);
     }
 
+    logger_log(conn->raop->logger, LOGGER_INFO, "  video_flush");
     conn->raop->callbacks.video_flush(conn->raop->callbacks.cls);
 
     free(conn->local);
     free(conn->remote);
+
+    logger_log(conn->raop->logger, LOGGER_INFO, "  Destroying session");
+
     pairing_session_destroy(conn->pairing);
     fairplay_destroy(conn->fairplay);
+
+    logger_log(conn->raop->logger, LOGGER_INFO, "Destroyed connection");
+
     free(conn);
+
+	return;
 }
 
 raop_t *
@@ -303,11 +319,14 @@ raop_init(int max_clients, raop_callbacks_t *callbacks) {
     memcpy(&raop->callbacks, callbacks, sizeof(raop_callbacks_t));
     raop->pairing = pairing;
     raop->httpd = httpd;
+
     return raop;
 }
 
 void
 raop_destroy(raop_t *raop) {
+    logger_log(raop->logger, LOGGER_INFO, "Destroying raop");
+
     if (raop) {
         raop_stop(raop);
         pairing_destroy(raop->pairing);
@@ -318,6 +337,10 @@ raop_destroy(raop_t *raop) {
         /* Cleanup the network */
         netutils_cleanup();
     }
+
+    logger_log(raop->logger, LOGGER_INFO, "Destroyed raop");
+
+	return;
 }
 
 int

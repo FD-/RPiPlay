@@ -44,7 +44,7 @@ typedef enum background_mode_e {
 typedef enum video_renderer_type_e {
     VIDEO_RENDERER_DUMMY,
     VIDEO_RENDERER_RPI,
-    VIDEO_RENDERER_GSTREAMER
+    //VIDEO_RENDERER_GSTREAMER
 } video_renderer_type_t;
 
 typedef enum flip_mode_e {
@@ -77,6 +77,9 @@ typedef struct video_renderer_funcs_s {
      *       -1: a connection lost
      */
     void (*update_background)(video_renderer_t *renderer, int type);
+    void (*conn_init)(video_renderer_t *renderer);
+    void (*conn_destroy)(video_renderer_t *renderer);
+
 } video_renderer_funcs_t;
 
 typedef struct video_renderer_s {

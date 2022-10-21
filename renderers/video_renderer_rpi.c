@@ -154,21 +154,30 @@ static void omx_event_handler(void *userdata, COMPONENT_T *comp, OMX_U32 data) {
 }
 
 static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
+printf("video_renderer_rpi_init_decoder(): INN\n");
+
     memset(renderer->components, 0, sizeof(renderer->components));
     memset(renderer->tunnels, 0, sizeof(renderer->tunnels));
 
-    bcm_host_init();
+     printf(" 1\n");
+//bcm_host_init();
 
+     printf(" 2\n");
     video_renderer_rpi_update_background(&renderer->base, 0);
+
+
+return( 1 );
 
     if ((renderer->client = ilclient_init()) == NULL) {
         return -3;
     }
+     printf(" -3\n");
 
-    if (OMX_Init() != OMX_ErrorNone) {
-        ilclient_destroy(renderer->client);
-        return -4;
-    }
+    //if (OMX_Init() != OMX_ErrorNone) {
+//ilclient_destroy(renderer->client);
+        //return -4;
+    //}
+     printf(" -4\n");
 
     // Create video_decode
     if (ilclient_create_component(renderer->client, &renderer->video_decoder, "video_decode",
@@ -200,6 +209,8 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
         return -14;
     }
     ilclient_set_configchanged_callback(renderer->client, omx_event_handler, renderer);
+
+     printf(" -14n");
 
     // Create clock
     if (ilclient_create_component(renderer->client, &renderer->clock, "clock",
@@ -247,6 +258,8 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
     set_tunnel(&renderer->tunnels[1], renderer->video_scheduler, 11, renderer->video_renderer, 90);
     set_tunnel(&renderer->tunnels[2], renderer->clock, 80, renderer->video_scheduler, 12);
 
+     printf(" -13\n");
+
     // Setup renderer
     OMX_CONFIG_DISPLAYREGIONTYPE display_region;
     memset(&display_region, 0, sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
@@ -293,6 +306,7 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
             return -15;
         }
     }
+     printf(" -15\n");
 
     // Setup flipping
     if (renderer->config->flip != FLIP_NONE) {
@@ -323,6 +337,7 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
             return -15;
         }
     }
+     printf(" -15b\n");
 
     // Set decoder format
     ilclient_change_component_state(renderer->video_decoder, OMX_StateIdle);
@@ -340,12 +355,17 @@ static int video_renderer_rpi_init_decoder(video_renderer_rpi_t *renderer) {
         return -15;
     }
 
+     printf("video_renderer_rpi_init_decoder(): OUT\n");
+
     // Components are started in video_renderer_start()
 
     return 1;
 }
 
 video_renderer_t *video_renderer_rpi_init(logger_t *logger, video_renderer_config_t const *config) {
+
+printf("video_renderer_rpi_init(): INN\n");
+
     video_renderer_rpi_t *renderer;
     renderer = calloc(1, sizeof(video_renderer_rpi_t));
     if (!renderer) {
@@ -360,10 +380,14 @@ video_renderer_t *video_renderer_rpi_init(logger_t *logger, video_renderer_confi
     renderer->first_packet_time = 0;
     renderer->input_frames = 0;
 
-    if (video_renderer_rpi_init_decoder(renderer) != 1) {
+    int errInit = video_renderer_rpi_init_decoder(renderer);
+    if (errInit != 1) {
+     printf("video_renderer_rpi_init_decoder Error:%d\n", errInit);
         free(renderer);
         renderer = NULL;
     }
+
+printf( "video_renderer_rpi_init(): OUT\n" );
 
     return &renderer->base;
 }
@@ -378,15 +402,41 @@ COMPONENT_T *video_renderer_rpi_get_clock(video_renderer_rpi_t *renderer) {
     return renderer->clock;
 }
 
+
+// mgtm
+#define PATH_FILE_VIDEO_OUT "/home/truebike/rpi.out.h264"
+FILE *fileVideoOut;
+
+
 static void video_renderer_rpi_start(video_renderer_t *renderer) {
+ printf( "video_renderer_rpi_start(): INN\n" );
+
+
+// mgtm
+fileVideoOut = fopen(PATH_FILE_VIDEO_OUT,"wb");  // w for write, b for binary
+
+if ( !fileVideoOut ) {
+    printf("ERROR: Could not open video output file %s\n", PATH_FILE_VIDEO_OUT);
+}
+
+
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
-    ilclient_change_component_state(r->clock, OMX_StateExecuting);
-    ilclient_change_component_state(r->video_decoder, OMX_StateExecuting);
+//    ilclient_change_component_state(r->clock, OMX_StateExecuting);
+//    ilclient_change_component_state(r->video_decoder, OMX_StateExecuting);
 }
 
 static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_ntp_t *ntp, unsigned char *data, int data_len,
                                   uint64_t pts, int type) {
+
+
+
+printf( "video_renderer_rpi_render_buffer(): INN\n" );
+
     if (data_len == 0) return;
+
+
+printf( "video_renderer_rpi_render_buffer(): 000\n" );
+
 
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
 
@@ -396,12 +446,18 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
     uint8_t *modified_data = NULL;
 
     if (type == 0) {
-        // This reduces the Raspberry Pi H264 decode pipeline delay from about 11 to 6 frames for RPiPlay.
+
+
+printf( "video_renderer_rpi_render_buffer(): 010\n" );
+         // This reduces the Raspberry Pi H264 decode pipeline delay from about 11 to 6 frames for RPiPlay.
         // Described at https://www.raspberrypi.org/forums/viewtopic.php?t=41053
         logger_log(renderer->logger, LOGGER_DEBUG, "Injecting max_dec_frame_buffering");
         int sps_start, sps_end;
         int sps_size = find_nal_unit(data, data_len, &sps_start, &sps_end);
         if (sps_size > 0) {
+
+printf( "video_renderer_rpi_render_buffer(): 020\n" );
+
             const int sps_wiggle_room = 12;
             const unsigned char nal_marker[] = { 0x0, 0x0, 0x0, 0x1 };
             int modified_data_len = data_len + sps_wiggle_room + sizeof(nal_marker);
@@ -419,6 +475,9 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
                 memcpy(modified_data + sps_start + new_sps_size + sizeof(nal_marker), data + sps_start, data_len - sps_start);
                 data = modified_data;
                 data_len = data_len + new_sps_size + sizeof(nal_marker);
+
+printf( "video_renderer_rpi_render_buffer(): 030\n" );
+
             } else {
                 free(modified_data);
                 modified_data = NULL;
@@ -428,6 +487,22 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
             logger_log(renderer->logger, LOGGER_ERR, "Could not find sps boundaries");
         }
     }
+
+
+
+// mgtm - write modified data to a file
+int numWritten = fwrite( data, data_len, 1, fileVideoOut ); 
+if ( numWritten == 1 ) {
+    //printf("Writing to video output file %s\n", PATH_FILE_VIDEO_OUT);
+} else {
+    printf("ERROR: Error writing to video output file %s\n", PATH_FILE_VIDEO_OUT);
+}
+return;
+
+
+
+
+
 
     if (ilclient_remove_event(r->video_decoder, OMX_EventPortSettingsChanged, 131, 0, 0, 1) == 0) {
         logger_log(renderer->logger, LOGGER_DEBUG, "Port settings changed!!");
@@ -448,6 +523,10 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
 
         ilclient_change_component_state(r->video_renderer, OMX_StateExecuting);
     }
+
+
+
+
 
     int offset = 0;
     while (offset < data_len) {
@@ -493,9 +572,20 @@ static void video_renderer_rpi_render_buffer(video_renderer_t *renderer, raop_nt
         // so we need to free the data buffer here
         free(modified_data);
     }
+ printf( "video_renderer_rpi_start(): OUT\n" );
+
+	return;
 }
 
 static void video_renderer_rpi_flush(video_renderer_t *renderer) {
+
+
+// mgtm
+int errFlush = fflush( fileVideoOut );
+if ( errFlush ) {
+    printf("ERROR: Could not flush video output file %s\n", PATH_FILE_VIDEO_OUT);
+}
+
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     OMX_BUFFERHEADERTYPE *buffer = ilclient_get_input_buffer(r->video_decoder, 130, 1);
     if (buffer == NULL) logger_log(renderer->logger, LOGGER_ERR, "Got NULL buffer while flushing!");
@@ -517,6 +607,9 @@ static void video_renderer_rpi_flush(video_renderer_t *renderer) {
 }
 
 static void video_renderer_rpi_destroy(video_renderer_t *renderer) {
+
+fclose( fileVideoOut );
+
     video_renderer_rpi_t *r = (video_renderer_rpi_t *)renderer;
     if (renderer) {
         // Only flush if data was sent through, gets stuck otherwise
