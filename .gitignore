@@ -9,3 +9,5 @@
 /build
 /captures
 .externalNativeBuild
+/.idea/
+/cmake-build-*/

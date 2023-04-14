@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.4.1)
 
+option(DISABLE_GSTREAMER_RENDERER "" OFF)
+option(ENABLE_FFMPEG_SDL2_RENDERER "" ON)
+
 set(default_build_type "Release")
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
@@ -19,10 +22,12 @@ add_subdirectory(lib/llhttp)
 add_subdirectory(lib)
 add_subdirectory(renderers)
 
-# Make sure the main executable is aware of the available renderers
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RENDERER_FLAGS}" )
-
 add_executable( rpiplay rpiplay.cpp)
 target_link_libraries ( rpiplay renderers airplay )
+
+# Make sure the main executable is aware of the available renderers
+target_compile_definitions(rpiplay PRIVATE
+		 "${RENDERER_FLAGS}"
+)
 
 install(TARGETS rpiplay RUNTIME DESTINATION bin)

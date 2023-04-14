@@ -44,7 +44,8 @@ typedef enum background_mode_e {
 typedef enum video_renderer_type_e {
     VIDEO_RENDERER_DUMMY,
     VIDEO_RENDERER_RPI,
-    VIDEO_RENDERER_GSTREAMER
+    VIDEO_RENDERER_GSTREAMER,
+    VIDEO_RENDERER_FFMPEG_SDL2,
 } video_renderer_type_t;
 
 typedef enum flip_mode_e {
@@ -88,6 +89,7 @@ typedef struct video_renderer_s {
 video_renderer_t *video_renderer_dummy_init(logger_t *logger, video_renderer_config_t const *config);
 video_renderer_t *video_renderer_rpi_init(logger_t *logger, video_renderer_config_t const *config);
 video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer_config_t const *config);
+video_renderer_t *video_renderer_ffmpeg_sdl2_init(logger_t *logger, video_renderer_config_t const *config);
 
 #ifdef __cplusplus
 }
