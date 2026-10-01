@@ -11,7 +11,19 @@ the DAC.
 
 ---
 
-# Quick start
+# Quick start (one command)
+
+From a workstation that has this repository and SSH access to the Pi:
+
+```bash
+./deploy/one-command-deploy.sh [user@]pi-host
+```
+
+That single command syncs the repo, runs the full provisioner interactively
+(type the Pi's sudo password when it asks), reboots the Pi, and verifies the
+services + DAC card afterwards. Then pair the phone as in step 3 below.
+
+# Quick start (manual)
 
 1. Flash **Raspberry Pi OS Lite** on an SD card with ≥8GB using the latest version of [`rpi-imager`](https://www.raspberrypi.com/software/) setting up username password, wifi and enable SSH, wait for boot to finish.
 2. Clone this repo [git@text70/RPriPlay](https://github.com/text70/RPiPlay.git). Then run the following in order to copy the Pi using `rsync`, SSH in and run the provisioner script:
