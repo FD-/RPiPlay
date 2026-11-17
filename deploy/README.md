@@ -5,23 +5,25 @@ and **AirPlay mirroring receiver**, with the audio output on an I2S DAC HAT
 (InnoMaker DAC Mini HiHat / PCM5122 — HiFiBerry DAC+ compatible).
 
 Everything was verified end-to-end on a Raspberry Pi Zero W v1.1 running
-Raspberry Pi OS Trixie (32-bit armhf, kernel 6.18.50+rpt-rpi-v6), with music
+Raspberry Pi OS Lite Trixie (32-bit armhf, kernel 6.18.50+rpt-rpi-v6), with music
 streamed from Android (Bluetooth) and iPhone (AirPlay) through PipeWire onto
 the DAC.
 
 ---
 
-# Quick start (automated)
+# Quick start
 
-1. Flash **Raspberry Pi OS Lite (64-bit)** using the latest version of `rpi-imager` setting up username password, wifi and enable SSH, wait for boot to finish.
-2. Copy this repository to the Pi using `rsync`, SSH in and run the provisioner script:
+1. Flash **Raspberry Pi OS Lite** on an SD card with ≥8GB using the latest version of [`rpi-imager`](https://www.raspberrypi.com/software/) setting up username password, wifi and enable SSH, wait for boot to finish.
+2. Clone this repo [git@text70/RPriPlay](https://github.com/text70/RPiPlay.git). Then run the following in order to copy the Pi using `rsync`, SSH in and run the provisioner script:
 
 ```bash
-rsync -a --exclude build --exclude .git ./ pi@<pi-address>:RPiPlay/
+cd ~/RPiPlay && rsync -a --exclude build --exclude .git ./ pi@<pi-address>:RPiPlay/
 ssh pi@<pi-address>
 cd ~/RPiPlay/deploy && ./provision.sh
 sudo reboot
 ```
+>[!TIP]
+>The `provision.sh` process can take thirty minutes to an hour to patch and compile depending on your Pi version. 
 
 3. After the reboot, pair your phone:
    - **Phone → Settings → Bluetooth → "raspberrypi" → Pair** (no PIN needed)
