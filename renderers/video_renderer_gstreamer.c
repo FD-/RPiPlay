@@ -22,6 +22,8 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct video_renderer_gstreamer_s {
     video_renderer_t base;
@@ -29,6 +31,50 @@ typedef struct video_renderer_gstreamer_s {
 } video_renderer_gstreamer_t;
 
 static const video_renderer_funcs_t video_renderer_gstreamer_funcs;
+
+/* Returns true if the named GStreamer element exists in the registry. */
+static gboolean element_available(const char *name) {
+    GstElementFactory *factory = gst_element_factory_find(name);
+    if (factory) {
+        gst_object_unref(factory);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/* Pick the H.264 decoder:
+ * - RPIPLAY_VDECODER env var forces a specific decoder (e.g. avdec_h264 for
+ *   debugging, v4l2h264dec for the Broadcom GPU on Raspberry Pi)
+ * - otherwise use the hardware V4L2 decoder if present (Raspberry Pi 3/4/
+ *   Zero 2 W with the bcm2835_codec kernel module), else fall back to
+ *   decodebin (software decoding, or whatever else GStreamer auto-selects) */
+static const char *select_video_decoder(logger_t *logger) {
+    const char *forced = getenv("RPIPLAY_VDECODER");
+    if (forced && forced[0]) {
+        if (element_available(forced)) {
+            return forced;
+        }
+        logger_log(logger, LOGGER_WARNING, "GStreamer element %s not available, ignoring RPIPLAY_VDECODER", forced);
+    }
+    if (element_available("v4l2h264dec")) {
+        return "v4l2h264dec";
+    }
+    return "decodebin";
+}
+
+static const char *select_sink(const char *env_name, const char *fallback, logger_t *logger, const char *kind) {
+    const char *forced = getenv(env_name);
+    if (forced && forced[0]) {
+        if (element_available(forced)) {
+            return forced;
+        }
+        logger_log(logger, LOGGER_WARNING, "GStreamer element %s not available, ignoring %s", forced, env_name);
+    }
+    if (!element_available(fallback)) {
+        logger_log(logger, LOGGER_WARNING, "GStreamer element %s not available, %s pipeline may fail", fallback, kind);
+    }
+    return fallback;
+}
 
 static gboolean check_plugins(void)
 {
@@ -65,11 +111,38 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer
     renderer->base.funcs = &video_renderer_gstreamer_funcs;
     renderer->base.type = VIDEO_RENDERER_GSTREAMER;
 
-    assert(check_plugins());
+    if (!check_plugins()) {
+        logger_log(logger, LOGGER_ERR, "Missing required GStreamer plugins");
+        free(renderer);
+        return NULL;
+    }
+
+    const char *decoder = select_video_decoder(logger);
+    gboolean use_v4l2 = strcmp(decoder, "v4l2h264dec") == 0;
+    /* Apple sends the video in BT.709, but the V4L2 Broadcom decoder does
+     * not signal the colorimetry correctly; force it to avoid washed out
+     * colours. Follows the -bt709 workaround used by UxPlay. */
+    const char *bt709_env = getenv("RPIPLAY_BT709");
+    gboolean use_bt709 = use_v4l2 && bt709_env && bt709_env[0] && strcmp(bt709_env, "0") != 0;
+    const char *videosink = select_sink("RPIPLAY_VIDEOSINK", "autovideosink", logger, "video");
+
+    logger_log(logger, LOGGER_INFO, "GStreamer video decoder: %s%s", decoder, use_bt709 ? " (with bt709 fix)" : "");
 
     // Begin the video pipeline
-    GString *launch = g_string_new("appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
-                                   "queue ! decodebin ! videoconvert ! ");
+    GString *launch = g_string_new("");
+    if (use_v4l2) {
+        /* Hardware path: parse the byte-stream and decode on the GPU. */
+        g_string_append(launch, "appsrc name=video_source caps=\"video/x-h264,stream-format=byte-stream,alignment=au\""
+                                " stream-type=0 format=GST_FORMAT_TIME is-live=true !"
+                                " queue ! h264parse ! ");
+        if (use_bt709) {
+            g_string_append(launch, "capssetter caps=\"video/x-h264,colorimetry=bt709\" ! ");
+        }
+        g_string_append_printf(launch, "%s ! videoconvert ! ", decoder);
+    } else {
+        g_string_append(launch, "appsrc name=video_source stream-type=0 format=GST_FORMAT_TIME is-live=true !"
+                                " queue ! decodebin ! videoconvert ! ");
+    }
     // Setup rotation
     if (config->rotation != 0) {
         switch (config->rotation) {
@@ -112,7 +185,7 @@ video_renderer_t *video_renderer_gstreamer_init(logger_t *logger, video_renderer
     }
 
     // Finish the pipeline
-    g_string_append(launch, "autovideosink name=video_sink sync=false");
+    g_string_append_printf(launch, "%s name=video_sink sync=false", videosink);
 
     renderer->pipeline = gst_parse_launch(launch->str, &error);
     g_assert(renderer->pipeline);

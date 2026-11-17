@@ -4,6 +4,56 @@ An open-source implementation of an AirPlay mirroring server for the Raspberry P
 The goal is to make it run smoothly even on a Raspberry Pi Zero.
 
 
+# Quickstart
+
+Build and start `rpiplay` — an AirPlay target appears on your network under the
+name of the server (default "RPiPlay"):
+
+```bash
+rpiplay
+```
+
+> **Building a complete Bluetooth-speaker + AirPlay box with a DAC HAT?**
+> Skip the manual work: `deploy/provision.sh` sets everything up in one run.
+> See [deploy/README.md](deploy/README.md) for the automated quickstart and a
+> full step-by-step manual setup (packages, DAC overlay, patched driver,
+> services, phone pairing).
+
+Both devices must be on the same network (and mDNS/Bonjour traffic must be
+allowed — check your router's "AP isolation" setting if the server does not
+show up).
+
+## iPhone / iPad
+
+1. Open **Control Center → Screen Mirroring** and select **RPiPlay**.
+2. Screen (with its audio) mirrors to the Pi — e.g. play YouTube Music or any
+   other app while mirroring; its audio is streamed to the Pi automatically.
+
+Notes:
+
+* Use *Screen Mirroring*, not the in-app AirPlay icon: audio-only AirPlay
+  (ALAC) streams are not supported.
+* Alternatively, pair the Pi in the Bluetooth settings and use it as an A2DP
+  speaker — no mirroring needed (the Pi must have Bluetooth audio set up, see
+  the Bluetooth section below).
+
+## Android
+
+Android has no built-in AirPlay support, so pick one of these:
+
+* **Bluetooth (recommended, no app needed)** — pair the Pi in the Bluetooth
+  settings and play any music app; the Pi acts as an A2DP speaker. The Pi-side
+  setup is described in the Bluetooth section below.
+* **A mirroring sender app** — install an app that discovers AirPlay receivers
+  (e.g. "Cast to TV" or LetsView), select RPiPlay and mirror. Support varies
+  by app and vendor; test before relying on it.
+* Samsung **Smart View does not work** — it speaks Miracast/Google Cast/DLNA,
+  not AirPlay.
+
+Audio on the Pi itself requires an audio output — see the external DAC section
+below for HiFiBerry boards.
+
+
 # State
 
 Screen mirroring and audio works for iOS 9 or newer. Recent macOS versions also seem to be compatible. The GPU is used for decoding the h264 video stream. The Pi has no hardware acceleration for audio (AirPlay mirroring uses AAC), so the FDK-AAC decoder is used for that.
@@ -34,6 +84,7 @@ The following packages are required for building on Raspbian:
 * **libavahi-compat-libdnssd-dev** (for the bonjour registration)
 * **libplist-dev** (for plist handling)
 * **libssl-dev** (for crypto primitives)
+* **libasound2-dev** (for the ALSA audio renderer)
 * **ilclient** and Broadcom's OpenMAX stack as present in `/opt/vc` in Raspbian.
 
 For downloading the code, use these commands:
@@ -48,6 +99,7 @@ sudo apt-get install cmake
 sudo apt-get install libavahi-compat-libdnssd-dev
 sudo apt-get install libplist-dev
 sudo apt-get install libssl-dev
+sudo apt-get install libasound2-dev
 mkdir build
 cd build
 cmake ..
@@ -62,7 +114,7 @@ For building on desktop linux, follow these steps as per your distribution:
 
 ## Ubuntu 18.04 or 20.04
 ```bash
-sudo apt-get install cmake libavahi-compat-libdnssd-dev libplist-dev libssl-dev \
+sudo apt-get install cmake libavahi-compat-libdnssd-dev libplist-dev libssl-dev libasound2-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-libav \
     gstreamer1.0-vaapi gstreamer1.0-plugins-bad
 mkdir build
@@ -73,7 +125,7 @@ make
 
 ## Fedora 33
 ```bash
-sudo dnf install cmake avahi-compat-libdns_sd-devel libplist-devel openssl-devel \
+sudo dnf install cmake avahi-compat-libdns_sd-devel libplist-devel openssl-devel alsa-lib-devel \
     gstreamer1-plugins-base-devel gstreamer1-libav gstreamer1-vaapi \
     gstreamer1-plugins-bad-free
 mkdir build
@@ -82,7 +134,116 @@ cmake ..
 make
 ```
 
-Note: The -b, -r, -l, and -a options are not supported with the gstreamer renderer.
+Note: The -b, -r, -l and -a options are not supported with the gstreamer renderer.
+
+# Modern Raspberry Pi systems (Pi 4, Pi 5, 64-bit OS)
+
+The OpenMAX-based Raspberry Pi renderer only works on Pi models whose firmware
+still ships the Broadcom OpenMAX stack (`/opt/vc`): Pi 3/4 and the Pi Zero
+family, 32- or 64-bit OS. Use the GStreamer renderers on everything else:
+
+* **Raspberry Pi 5**: OpenMAX is gone and there is no hardware H.264 decoder —
+  the CPU is fast enough for software decoding. Use `-vr gstreamer -ar gstreamer`.
+* **Pi 4 / Pi 3 / Pi Zero 2 W on Raspberry Pi OS Bookworm (GStreamer >= 1.22)**:
+  the GStreamer video renderer automatically uses hardware H.264 decoding via
+  the `v4l2h264dec` element (needs the `bcm2835_codec` kernel module and
+  `gstreamer1.0-plugins-good`). Check the startup log: it prints
+  `GStreamer video decoder: v4l2h264dec` when the hardware path is active.
+* **Headless systems** (Pi OS Lite / framebuffer or Wayland):
+  `autovideosink` does not always pick the right sink; force one with
+  `RPIPLAY_VIDEOSINK=kmssink` (framebuffer console) or `RPIPLAY_VIDEOSINK=waylandsink`.
+
+Several parts of the GStreamer pipeline can be tuned with environment
+variables, mainly for debugging:
+
+| Variable | Meaning |
+|---|---|
+| `RPIPLAY_VDECODER` | Force the H.264 decoder element (e.g. `avdec_h264` for software decoding, or to work around a broken hardware decoder). Default: `v4l2h264dec` if available, else `decodebin`. |
+| `RPIPLAY_VIDEOSINK` | Force the video sink element (e.g. `kmssink`, `waylandsink`, `glimagesink`). Default: `autovideosink`. |
+| `RPIPLAY_AUDIOSINK` | Force the audio sink element (e.g. `alsasink`, `pipewiresink`). Default: `autoaudiosink`. |
+| `RPIPLAY_BT709` | Set to `1` to force BT.709 colorimetry; needed with `v4l2h264dec` when mirrored colours look washed out. |
+
+# Audio output on external DACs (e.g. HiFiBerry)
+
+The Raspberry Pi OpenMAX audio renderer can only address the firmware's built-in
+outputs ("local" and "hdmi"); external I2S sound cards are not reachable through it.
+To play on an external DAC such as the [HiFiBerry DAC+](https://www.hifiberry.com/dacs/)
+family, use the ALSA audio renderer:
+
+```bash
+rpiplay -ar alsa -a analog
+```
+
+With `-a analog`, the ALSA renderer automatically uses a HiFiBerry card if one is
+detected, and falls back to the system default device otherwise. You can also point
+it at any ALSA device explicitly:
+
+```bash
+rpiplay -ar alsa -a sysdefault:CARD=sndrpihifiberrydacplus
+```
+
+Run `aplay -l` to list the card names on your system. Volume changes from the phone
+are mapped onto the DAC's hardware mixer where one is available (e.g. DAC+/Pro with
+the PCM5122 chip); on boards without a hardware mixer (e.g. DAC+ Light) volume
+control is ignored with a warning.
+
+The DAC itself is set up on the OS side, independently of RPiPlay. Enable the
+matching device tree overlay in `/boot/config.txt` (see the
+[HiFiBerry configuration guide](https://www.hifiberry.com/docs/software/configuring-linux-3-18-x/)):
+
+| Board | dtoverlay |
+|---|---|
+| DAC (Pi 1), DAC+ Light, DAC Zero, MiniAmp, DAC+ DSP, DAC+ RTC | `hifiberry-dac` |
+| DAC+ Standard, DAC+ Pro, DAC2 Pro, Amp2, Amp4 | `hifiberry-dacplus` (kernels >= 6.1.77: `hifiberry-dacplus-std` / `-pro`) |
+| DAC2 HD | `hifiberry-dacplushd` |
+| DAC+ ADC / DAC+ ADC Pro | `hifiberry-dacplusadc` / `hifiberry-dacplusadcpro` |
+| Digi+ / Digi2 Pro (S/PDIF) | `hifiberry-digi` / `hifiberry-digi-pro` |
+
+After rebooting, verify the card shows up with `aplay -l`. If you want *all*
+system audio (not just RPiPlay) to use the DAC, also set the ALSA default card as
+described in the guide.
+
+Note: RPiPlay receives audio as part of the mirroring stream (AAC-ELD). Audio-only
+AirPlay streaming (e.g. AirTunes/ALAC from music apps) is not supported, so use a
+sender that mirrors the screen (or its audio) to the RPiPlay device.
+
+## Alternative: Bluetooth A2DP (from any phone)
+
+AirPlay mirroring requires a sender app on Android. If you just want music from a
+phone on the DAC, the Pi can also act as a Bluetooth speaker — that needs no
+sender app at all and works with every phone natively.
+
+Two software options:
+
+**BlueALSA (recommended — lightweight, reliable on the Pi Zero):**
+
+```bash
+sudo apt-get install -y bluez-alsa-utils
+sudo tee /etc/systemd/system/bluealsa.service.d/a2dp.conf >/dev/null <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/bluealsa -p a2dp-sink
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now bluealsa
+# play received audio through the DAC:
+sudo systemctl enable --now bluealsa-aplay
+```
+
+`bluealsa-aplay` routes the decoded Bluetooth audio to the ALSA default
+device — with `pipewire-alsa` installed that is PipeWire, so Bluetooth and
+AirPlay mix on the same DAC.
+
+**PipeWire Bluetooth (when the image's bluez5 SPA plugin is intact):**
+install `libspa-0.2-bluetooth`, set
+`bluez5.roles = [ a2dp_sink ]` (and `enable-sbc-xq`, `enable-hw-volume`) in
+the `monitor.bluez.properties` section of the WirePlumber config, and
+restart WirePlumber. Note: on some images this monitor does not register
+A2DP endpoints (verify with `journalctl -u bluetooth | grep -i endpoint`);
+BlueALSA is the dependable fallback.
+
+Both approaches need the Pi made visible once (see `bt-agent`/bluetoothctl
+setup in the deploy kit, `deploy/README.md`) and the phone paired + trusted.
 
 # Global installation
 
@@ -90,6 +251,18 @@ After building, to install the executable on the system permanently (so it can b
 ```bash
 sudo make install
 ```
+
+A systemd service template is installed to `lib/systemd/system/rpiplay.service`,
+so RPiPlay can also be started at boot:
+```bash
+sudo systemctl enable --now rpiplay
+```
+The service runs `rpiplay` without arguments by default. To change the command
+line, set the CMake cache variable when building (e.g.
+`cmake .. -DRPIPLAY_SERVICE_ARGS="-vr gstreamer -ar alsa -a analog"` and
+reinstall), or override it on the target system with a drop-in:
+`systemctl edit rpiplay`. When running as a system service, consider adding a
+`User=` line for an unprivileged user with audio access.
 
 # Usage
 
@@ -106,11 +279,11 @@ At the moment, these options are implemented:
 
 **-l**: Enables low-latency mode. Low-latency mode reduces latency by effectively rendering audio and video frames as soon as they are received, ignoring the associated timestamps. As a side effect, playback will be choppy and audio-video sync will be noticably off.
 
-**-a (hdmi|analog|off)**: Set audio output device
+**-a (hdmi|analog|off)**: Set audio output device. The alsa renderer additionally accepts an explicit ALSA device name (e.g. `sysdefault:CARD=sndrpihifiberrydacplus`) and automatically plays through a HiFiBerry DAC for `analog` if one is present (see the section on external DACs below).
 
 **-vr renderer**: Select a video renderer to use (rpi, gstreamer, or dummy)
 
-**-ar renderer**: Select an audio renderer to use (rpi, gstreamer, or dummy)
+**-ar renderer**: Select an audio renderer to use (rpi, alsa, gstreamer, or dummy)
 
 **-d**: Enables debug logging. Will lead to choppy playback due to heavy console output.
 
@@ -150,6 +323,26 @@ Your contributions are more than welcome!
 * Bug: Sometimes cannot be stopped?
 
 # Changelog
+
+### Version 1.3 (unreleased)
+
+* New `alsa` audio renderer (fdk-aac decoding, ALSA output) — required for external
+  I2S DACs such as the HiFiBerry family, which the OpenMAX renderer cannot reach.
+  Auto-selects a HiFiBerry card with `-a analog`; `-a` also accepts explicit ALSA
+  device names; phone volume is mapped to the DAC hardware mixer.
+* GStreamer video renderer: automatically uses the Broadcom hardware H.264 decoder
+  (`v4l2h264dec`) when available (Pi 3/4/Zero 2 W), falls back to `decodebin`
+  (software decoding, also the correct path on Pi 5). Optional BT.709 colorimetry
+  fix for the v4l2 decoder. Decoder and sinks can be overridden with the
+  `RPIPLAY_VDECODER`, `RPIPLAY_VIDEOSINK`, `RPIPLAY_AUDIOSINK` and `RPIPLAY_BT709`
+  environment variables; the selected decoder is logged at startup.
+* Audio quality fixes in the OpenMAX audio renderer: broken chunked-output copy
+  (first chunk was duplicated when the OMX input buffer could not hold a full
+  frame), fdk-aac error concealment for lost packets, preallocated decode buffer,
+  forced stereo output, fixed NULL dereference in audio renderer init failure path.
+* GStreamer renderers: required-plugin check was skipped in release builds
+  (assert compiled out with NDEBUG); it now fails initialization with a clear
+  message instead.
 
 ### Version 1.2
 

@@ -38,6 +38,11 @@
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
+#define AUDIO_CHANNELS 2
+/* Maximum decoded frame size we are prepared to handle. AirPlay mirror
+ * audio is AAC-ELD (480 samples/frame), but keep some headroom. */
+#define DECODE_BUFFER_SAMPLES 2048
+
 extern ILCLIENT_T *video_renderer_rpi_get_ilclient(video_renderer_t *renderer);
 extern COMPONENT_T *video_renderer_rpi_get_clock(video_renderer_t *renderer);
 
@@ -47,6 +52,7 @@ typedef struct audio_renderer_rpi_s {
     audio_renderer_config_t const *config;
 
     HANDLE_AACDECODER audio_decoder;
+    INT_PCM *decode_buffer;
 
     ILCLIENT_T *client;
     COMPONENT_T *audio_renderer;
@@ -63,7 +69,10 @@ typedef struct audio_renderer_rpi_s {
 static const audio_renderer_funcs_t audio_renderer_rpi_funcs;
 
 static void audio_renderer_rpi_destroy_decoder(audio_renderer_rpi_t *renderer) {
-    aacDecoder_Close(renderer->audio_decoder);
+    if (renderer->audio_decoder) {
+        aacDecoder_Close(renderer->audio_decoder);
+        renderer->audio_decoder = NULL;
+    }
 }
 
 static int audio_renderer_rpi_init_decoder(audio_renderer_rpi_t *renderer) {
@@ -82,10 +91,27 @@ static int audio_renderer_rpi_init_decoder(audio_renderer_rpi_t *renderer) {
         logger_log(renderer->base.logger, LOGGER_ERR, "Unable to set configRaw");
         return -2;
     }
+    /* The mirror stream is stereo, but make sure the decoder always
+     * downmixes to exactly two output channels. */
+    if (aacDecoder_SetParam(renderer->audio_decoder, AAC_PCM_MIN_OUTPUT_CHANNELS, AUDIO_CHANNELS) != AAC_DEC_OK ||
+        aacDecoder_SetParam(renderer->audio_decoder, AAC_PCM_MAX_OUTPUT_CHANNELS, AUDIO_CHANNELS) != AAC_DEC_OK) {
+        logger_log(renderer->base.logger, LOGGER_ERR, "Unable to set output channel count");
+        return -2;
+    }
+    /* Interpolate lost or corrupt frames instead of dropping to silence. */
+    if (aacDecoder_SetParam(renderer->audio_decoder, AAC_CONCEAL_METHOD, 1) != AAC_DEC_OK) {
+        logger_log(renderer->base.logger, LOGGER_ERR, "Unable to enable error concealment");
+        return -2;
+    }
     CStreamInfo *aac_stream_info = aacDecoder_GetStreamInfo(renderer->audio_decoder);
     if (aac_stream_info == NULL) {
         logger_log(renderer->base.logger, LOGGER_ERR, "aacDecoder_GetStreamInfo failed!");
         return -3;
+    }
+
+    renderer->decode_buffer = malloc(DECODE_BUFFER_SAMPLES * AUDIO_CHANNELS * sizeof(INT_PCM));
+    if (renderer->decode_buffer == NULL) {
+        return -4;
     }
 
     logger_log(renderer->base.logger, LOGGER_DEBUG, "> stream info: channel = %d\tsample_rate = %d\tframe_size = %d\taot = %d\tbitrate = %d",   \
@@ -257,14 +283,17 @@ audio_renderer_t *audio_renderer_rpi_init(logger_t *logger, video_renderer_t *vi
     renderer->input_frames = 0;
 
     if (audio_renderer_rpi_init_decoder(renderer) != 1) {
+        free(renderer->decode_buffer);
+        audio_renderer_rpi_destroy_decoder(renderer);
         free(renderer);
-        renderer = NULL;
+        return NULL;
     }
 
     if (audio_renderer_rpi_init_renderer(renderer, video_renderer) != 1) {
+        free(renderer->decode_buffer);
         audio_renderer_rpi_destroy_decoder(renderer);
         free(renderer);
-        renderer = NULL;
+        return NULL;
     }
 
     return &renderer->base;
@@ -296,33 +325,42 @@ static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_nt
 
     // We assume that every buffer contains exactly 1 frame.
 
-    AAC_DECODER_ERROR error = 0;
-
     UCHAR *p_buffer[1] = {data};
     UINT buffer_size = data_len;
     UINT bytes_valid = data_len;
-    error = aacDecoder_Fill(r->audio_decoder, p_buffer, &buffer_size, &bytes_valid);
+    AAC_DECODER_ERROR error = aacDecoder_Fill(r->audio_decoder, p_buffer, &buffer_size, &bytes_valid);
     if (error != AAC_DEC_OK) {
         logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_Fill error : %x", error);
+        return;
     }
 
-    INT time_data_size = 4 * 480;
-    INT_PCM *p_time_data = malloc(time_data_size); // The buffer for the decoded AAC frames
-    error = aacDecoder_DecodeFrame(r->audio_decoder, p_time_data, time_data_size, 0);
+    error = aacDecoder_DecodeFrame(r->audio_decoder, r->decode_buffer, DECODE_BUFFER_SAMPLES * AUDIO_CHANNELS, 0);
     if (error != AAC_DEC_OK) {
-        logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_DecodeFrame error : 0x%x", error);
+        /* Feed the decoder a concealed frame so playback stays smooth. */
+        error = aacDecoder_DecodeFrame(r->audio_decoder, r->decode_buffer, DECODE_BUFFER_SAMPLES * AUDIO_CHANNELS, AACDEC_CONCEAL);
+        if (error != AAC_DEC_OK) {
+            logger_log(renderer->logger, LOGGER_ERR, "aacDecoder_DecodeFrame error : 0x%x", error);
+            return;
+        }
+        logger_log(renderer->logger, LOGGER_DEBUG, "Concealed audio frame");
     }
+
+    CStreamInfo *stream_info = aacDecoder_GetStreamInfo(r->audio_decoder);
+    if (stream_info == NULL || stream_info->frameSize <= 0 || stream_info->numChannels <= 0) {
+        return;
+    }
+    int frame_bytes = stream_info->frameSize * stream_info->numChannels * sizeof(INT_PCM);
 
 #ifdef DUMP_AUDIO
     if (file_pcm == NULL) {
         file_pcm = fopen("/home/pi/Airplay.pcm", "wb");
     }
 
-    fwrite(p_time_data, time_data_size, 1, file_pcm);
+    fwrite(r->decode_buffer, frame_bytes, 1, file_pcm);
 #endif
 
     int offset = 0;
-    while (offset < time_data_size) {
+    while (offset < frame_bytes) {
         int64_t audio_delay = ((int64_t) raop_ntp_get_local_time(ntp)) - ((int64_t) pts);
         logger_log(renderer->logger, LOGGER_DEBUG, "Audio delay is %lld", audio_delay);
         if (audio_delay > 100000)
@@ -332,8 +370,8 @@ static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_nt
         if (!buffer)
             break;
 
-        int chunk_size = MIN(time_data_size - offset, buffer->nAllocLen);
-        memcpy(buffer->pBuffer, p_time_data, chunk_size);
+        int chunk_size = MIN(frame_bytes - offset, buffer->nAllocLen);
+        memcpy(buffer->pBuffer, ((char *) r->decode_buffer) + offset, chunk_size);
         offset += chunk_size;
 
         buffer->nFilledLen = chunk_size;
@@ -350,8 +388,6 @@ static void audio_renderer_rpi_render_buffer(audio_renderer_t *renderer, raop_nt
             logger_log(renderer->logger, LOGGER_ERR, "Audio renderer refused processing buffer");
         }
     }
-
-    free(p_time_data);
 }
 
 static void audio_renderer_rpi_set_volume(audio_renderer_t *renderer, float volume) {
@@ -384,6 +420,7 @@ static void audio_renderer_rpi_destroy(audio_renderer_t *renderer) {
         audio_renderer_rpi_flush(renderer);
         audio_renderer_rpi_destroy_decoder(r);
         audio_renderer_rpi_destroy_renderer(r);
+        free(r->decode_buffer);
         free(renderer);
     }
 }

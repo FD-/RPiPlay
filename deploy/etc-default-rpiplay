@@ -1,0 +1,10 @@
+# Command line arguments for the rpiplay systemd service.
+#
+# -vr dummy: headless Pi (no display attached); switch to "-vr gstreamer"
+#            (with RPIPLAY_VIDEOSINK=kmssink if needed) once a display is used.
+# -ar alsa:  ALSA audio renderer, required for external I2S DACs.
+# -a pipewire: rpiplay decodes and hands PCM to PipeWire, which mixes it with
+#            Bluetooth audio and plays both on the DAC. Use "-a analog" instead
+#            to open the DAC card directly (exclusive - Bluetooth then cannot
+#            use it while rpiplay runs).
+RPIPLAY_ARGS="-vr dummy -ar alsa -a pipewire"

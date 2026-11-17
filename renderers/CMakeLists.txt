@@ -16,6 +16,9 @@ set( RENDERER_SOURCES audio_renderer_dummy.c video_renderer_dummy.c )
 set( RENDERER_LINK_LIBS "" )
 set( RENDERER_INCLUDE_DIRS "" )
 
+# fdk-aac is required by the Raspberry Pi and the ALSA audio renderers
+set( NEED_FDK_AAC OFF )
+
 # Check for availability of OpenMAX libraries on Raspberry Pi
 find_library( BRCM_GLES_V2 brcmGLESv2 HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
 find_library( BRCM_EGL brcmEGL HINTS ${CMAKE_SYSROOT}/opt/vc/lib/ )
@@ -33,21 +36,21 @@ if( BRCM_GLES_V2 AND BRCM_EGL AND OPENMAXIL AND BCM_HOST AND VCOS AND VCHIQ_ARM 
   	${CMAKE_SYSROOT}/opt/vc/src/hello_pi/libs/ilclient )
 
   option(BUILD_SHARED_LIBS "" OFF)
-  add_subdirectory(fdk-aac EXCLUDE_FROM_ALL)
   add_subdirectory( h264-bitstream )
 
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX   -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM -Wno-psabi" )
-  
+
   aux_source_directory( ${CMAKE_SYSROOT}/opt/vc/src/hello_pi/libs/ilclient/ ilclient_src )
   set( DIR_SRCS ${ilclient_src} )
   add_library( ilclient STATIC ${DIR_SRCS} )
 
-  target_link_libraries( ilclient ${BRCM_GLES_V2} ${BRCM_EGL} ${OPENMAXIL} 
+  target_link_libraries( ilclient ${BRCM_GLES_V2} ${BRCM_EGL} ${OPENMAXIL}
                          ${BCM_HOST} ${VCOS} ${VCHIQ_ARM} pthread rt m )
 
   set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_RPI_RENDERER" )
   set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_rpi.c video_renderer_rpi.c )
   set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} ilclient airplay fdk-aac h264-bitstream )
+  set( NEED_FDK_AAC ON )
 else()
   message( STATUS "OpenMAX libraries not found, skipping compilation of Raspberry Pi renderer" )
 endif()
@@ -69,6 +72,24 @@ if( PKG_CONFIG_FOUND )
   endif()
 else()
   message( STATUS "pkg-config not found, skipping compilation of GStreamer renderer" )
+endif()
+
+# Check for availability of ALSA
+find_package( ALSA )
+if( ALSA_FOUND )
+  message( STATUS "Found ALSA" )
+  set( RENDERER_FLAGS "${RENDERER_FLAGS} -DHAS_ALSA_RENDERER" )
+  set( RENDERER_SOURCES ${RENDERER_SOURCES} audio_renderer_alsa.c )
+  set( RENDERER_LINK_LIBS ${RENDERER_LINK_LIBS} fdk-aac airplay ${ALSA_LIBRARIES} )
+  set( NEED_FDK_AAC ON )
+else()
+  message( STATUS "ALSA not found, skipping compilation of ALSA renderer" )
+endif()
+
+# fdk-aac is only used by the Raspberry Pi and ALSA audio renderers
+if( NEED_FDK_AAC )
+  option(BUILD_SHARED_LIBS "" OFF)
+  add_subdirectory( fdk-aac EXCLUDE_FROM_ALL )
 endif()
 
 # Create the renderers library and link against everything

@@ -1,0 +1,15 @@
+[Unit]
+Description=RPiPlay AirPlay mirroring server
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/RPiPlay/build
+EnvironmentFile=/etc/default/rpiplay
+ExecStart=/home/pi/RPiPlay/build/rpiplay $RPIPLAY_ARGS
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

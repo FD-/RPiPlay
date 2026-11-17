@@ -10,6 +10,8 @@ endif()
 
 project(rpiplay)
 
+include(GNUInstallDirs)
+
 set (CMAKE_CXX_STANDARD 11)
 
 set (RENDERER_FLAGS "")
@@ -26,3 +28,11 @@ add_executable( rpiplay rpiplay.cpp)
 target_link_libraries ( rpiplay renderers airplay )
 
 install(TARGETS rpiplay RUNTIME DESTINATION bin)
+
+# Optional systemd service for running RPiPlay at boot. The command line
+# can be adjusted with -DRPIPLAY_SERVICE_ARGS="-vr gstreamer -ar alsa -a analog".
+set(RPIPLAY_SERVICE_ARGS "" CACHE STRING
+	"Command line arguments for the systemd rpiplay.service")
+configure_file(systemd/rpiplay.service.in systemd/rpiplay.service @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/systemd/rpiplay.service
+	DESTINATION lib/systemd/system)

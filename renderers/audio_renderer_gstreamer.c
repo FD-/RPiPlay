@@ -20,6 +20,8 @@
 #include "audio_renderer.h"
 #include <assert.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include <gst/app/gstappsrc.h>
 
 typedef struct audio_renderer_gstreamer_s {
@@ -30,6 +32,28 @@ typedef struct audio_renderer_gstreamer_s {
 } audio_renderer_gstreamer_t;
 
 static const audio_renderer_funcs_t audio_renderer_gstreamer_funcs;
+
+static gboolean element_available(const char *name) {
+    GstElementFactory *factory = gst_element_factory_find(name);
+    if (factory) {
+        gst_object_unref(factory);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/* Returns the audiosink to use: RPIPLAY_AUDIOSINK env var if it names an
+ * existing element, else autoaudiosink. */
+static const char *select_audiosink(logger_t *logger) {
+    const char *forced = getenv("RPIPLAY_AUDIOSINK");
+    if (forced && forced[0]) {
+        if (element_available(forced)) {
+            return forced;
+        }
+        logger_log(logger, LOGGER_WARNING, "GStreamer element %s not available, ignoring RPIPLAY_AUDIOSINK", forced);
+    }
+    return "autoaudiosink";
+}
 
 static gboolean check_plugins(void)
 {
@@ -64,16 +88,21 @@ audio_renderer_t *audio_renderer_gstreamer_init(logger_t *logger, video_renderer
     renderer->base.logger = logger;
     renderer->base.funcs = &audio_renderer_gstreamer_funcs;
     renderer->base.type = AUDIO_RENDERER_GSTREAMER;
-    
+
     // If the video renderer is not a gstreamer renderer, we need to initialize gstreamer
     if (!video_renderer || video_renderer->type != VIDEO_RENDERER_GSTREAMER) {
         gst_init(NULL, NULL);
     }
 
-    assert(check_plugins());
+    if (!check_plugins()) {
+        logger_log(logger, LOGGER_ERR, "Missing required GStreamer plugins");
+        free(renderer);
+        return NULL;
+    }
 
-    renderer->pipeline = gst_parse_launch("appsrc name=audio_source stream-type=0 format=GST_FORMAT_TIME is-live=true ! queue ! decodebin !"
-    "audioconvert ! volume name=volume ! level ! autoaudiosink sync=false", &error);
+    renderer->pipeline = gst_parse_launch(
+        g_strdup_printf("appsrc name=audio_source stream-type=0 format=GST_FORMAT_TIME is-live=true ! queue ! decodebin !"
+        "audioconvert ! volume name=volume ! level ! %s sync=false", select_audiosink(logger)), &error);
     g_assert(renderer->pipeline);
 
     renderer->appsrc = gst_bin_get_by_name(GST_BIN(renderer->pipeline), "audio_source");

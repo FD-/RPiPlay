@@ -97,6 +97,9 @@ static const audio_renderer_list_entry_t audio_renderers[] = {
 #if defined(HAS_RPI_RENDERER)
     {"rpi", "AAC renderer using fdk-aac for decoding and OpenMAX for rendering", audio_renderer_rpi_init},
 #endif
+#if defined(HAS_ALSA_RENDERER)
+    {"alsa", "AAC renderer using fdk-aac for decoding and ALSA for rendering (supports external DACs, e.g. HiFiBerry)", audio_renderer_alsa_init},
+#endif
 #if defined(HAS_GSTREAMER_RENDERER)
     {"gstreamer", "GStreamer audio renderer", audio_renderer_gstreamer_init},
 #endif
@@ -198,7 +201,9 @@ void print_info(char *name) {
     printf("-r (90|180|270)       Specify image rotation in multiples of 90 degrees\n");
     printf("-f (horiz|vert|both)  Specify image flipping (horiz = horizontal, vert = vertical, both = both)\n");
     printf("-l                    Enable low-latency mode (disables render clock)\n");
-    printf("-a (hdmi|analog|off)  Set audio output device\n");
+    printf("-a (hdmi|analog|off)  Set audio output device. The alsa audio renderer also\n");
+    printf("                      accepts an ALSA device name (e.g. sysdefault:CARD=sndrpihifiberry)\n");
+    printf("                      and automatically uses a HiFiBerry DAC for 'analog' if present\n");
     printf("-vr renderer          Set video renderer to use. Available renderers:\n");
     for (int i = 0; i < sizeof(video_renderers)/sizeof(video_renderers[0]); i++) {
         printf("    %s: %s%s\n", video_renderers[i].name, video_renderers[i].description, i == 0 ? " [Default]" : "");
@@ -227,6 +232,7 @@ int main(int argc, char *argv[]) {
     audio_renderer_config_t audio_config;
     audio_config.device = DEFAULT_AUDIO_DEVICE;
     audio_config.low_latency = DEFAULT_LOW_LATENCY;
+    audio_config.alsa_device = NULL;
     
     // Default to the best available renderer
     video_init_func = video_renderers[0].init_func;
@@ -252,9 +258,22 @@ int main(int argc, char *argv[]) {
         } else if (arg == "-a") {
             if (i == argc - 1) continue;
             std::string audio_device_name(argv[++i]);
-            audio_config.device = audio_device_name == "hdmi" ? AUDIO_DEVICE_HDMI :
-                                  audio_device_name == "analog" ? AUDIO_DEVICE_ANALOG :
-                                  AUDIO_DEVICE_NONE;
+            if (audio_device_name == "off") {
+                audio_config.device = AUDIO_DEVICE_NONE;
+                audio_config.alsa_device = NULL;
+            } else if (audio_device_name == "hdmi") {
+                audio_config.device = AUDIO_DEVICE_HDMI;
+                audio_config.alsa_device = NULL;
+            } else if (audio_device_name == "analog") {
+                audio_config.device = AUDIO_DEVICE_ANALOG;
+                audio_config.alsa_device = NULL;
+            } else {
+                // Anything else is interpreted as an explicit ALSA device name,
+                // e.g. "sysdefault:CARD=sndrpihifiberrydacplus". It is only
+                // used by the alsa audio renderer.
+                audio_config.device = AUDIO_DEVICE_ANALOG;
+                audio_config.alsa_device = argv[i];
+            }
         } else if (arg == "-l") {
             video_config.low_latency = !video_config.low_latency;
             audio_config.low_latency = !audio_config.low_latency;
@@ -399,6 +418,12 @@ int start_server(std::vector<char> hw_addr, std::string name, bool debug_log,
     logger_set_level(render_logger, debug_log ? LOGGER_DEBUG : LOGGER_INFO);
 
     if (video_config->low_latency) logger_log(render_logger, LOGGER_INFO, "Using low-latency mode");
+
+#if defined(HAS_ALSA_RENDERER)
+    if (audio_config->alsa_device && audio_init_func != audio_renderer_alsa_init) {
+        LOGI("Custom audio device names are only supported by the alsa audio renderer");
+    }
+#endif
 
     if ((video_renderer = video_init_func(render_logger, video_config)) == NULL) {
         LOGE("Could not init video renderer");
